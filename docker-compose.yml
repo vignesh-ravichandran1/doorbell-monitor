@@ -1,0 +1,56 @@
+# Ring doorbell -> local recordings + phone notifications, no Ring subscription.
+#
+#   ring-mqtt  : logs into your Ring account, publishes ding/motion events to MQTT
+#                and exposes the doorbell's live view as an RTSP stream.
+#   mosquitto  : the MQTT broker those events travel through.
+#   recorder   : on each ding/motion, records a clip from the live stream to the
+#                external hard disk and pushes a notification (with snapshot) to your phone.
+#   web        : a simple page to browse and play the clips from any device at home.
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    restart: unless-stopped
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    ports:
+      - "1883:1883"
+
+  ring-mqtt:
+    image: tsightler/ring-mqtt:latest
+    restart: unless-stopped
+    depends_on: [mosquitto]
+    volumes:
+      - ./ring-mqtt:/data
+    ports:
+      - "55123:55123"   # one-time Ring login page
+      - "8554:8554"     # RTSP live stream
+    logging:
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  recorder:
+    build: ./recorder
+    restart: unless-stopped
+    depends_on: [mosquitto, ring-mqtt]
+    env_file: .env
+    environment:
+      MQTT_HOST: mosquitto
+      RTSP_HOST: ring-mqtt
+      RECORDINGS_DIR: /recordings
+    volumes:
+      - ${RECORDINGS_PATH:-./recordings}:/recordings
+    logging:
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  web:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    volumes:
+      - ./web/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ${RECORDINGS_PATH:-./recordings}:/recordings:ro
+    ports:
+      - "8080:80"

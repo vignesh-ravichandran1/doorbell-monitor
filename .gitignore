@@ -1,0 +1,6 @@
+.env
+ring-mqtt/*
+!ring-mqtt/.gitkeep
+recordings/
+__pycache__/
+.pytest_cache/
