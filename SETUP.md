@@ -33,6 +33,8 @@ Each step is safe to run again.
    - **Ring login:** your Ring email, password (hidden while you type) and the code Ring texts or emails you.
    - **Folder for clips:** press Enter for the default (`recordings` inside the app folder).
    - **Space for clips:** for testing, a small value like `2` GB is fine.
+   - **Doorbell on battery?** Answer **n** for a wired doorbell (records rings and motion), **y** for battery (rings only).
+   - **Settings page PIN:** choose 4–12 digits. It unlocks the Settings tab on the clips page.
    - **"Is this the one that will record 24/7?"** Answer **n** on the Mac while testing.
 5. **Run:**
    ```
@@ -62,6 +64,7 @@ Windows 7/8 or 32-bit Windows can't run it. `prepare.bat` will tell you so. In t
    ```
    - **Ring login:** same as on the Mac. This laptop gets its **own** login, so don't copy files over from the Mac.
    - **Folder for clips:** your external hard disk, e.g. `E:/doorbell`. Check its drive letter in File Explorer → This PC.
+   - **Settings page PIN:** choose 4–12 digits.
    - **Space for clips:** a GB amount that fits your disk, leaving some room. The oldest clips are deleted only when it's full.
    - **"Is this the one that will record 24/7?"** Answer **y**. This sets the laptop to never sleep on mains power and keep running with the lid closed, and it starts the recorder automatically every time you sign in.
 5. **Start it now:** double-click `windows\start-doorbell.bat`, or restart the laptop. A minimised window named *Doorbell recorder* means it's running. If it ever stops, it restarts within 10 seconds.
@@ -78,5 +81,40 @@ Windows 7/8 or 32-bit Windows can't run it. `prepare.bat` will tell you so. In t
 - **Each computer is its own environment** with its own login and settings. Ring replaces the token regularly, so a copy on another computer stops working. Always run `npm run setup` on each computer.
 - To remove a computer's access, open the Ring app → **Control Center → Authorized Client Devices**.
 
+## Watch from anywhere with Tailscale (free)
+Tailscale links your own devices in a private network, so your iPhone can open the clips page away from home. Nothing is opened to the internet, and only devices signed in to **your** Tailscale account can connect. The Personal plan is free (3 users, 100 devices; see tailscale.com/pricing).
+
+**On the computer that records (Mac now, Windows laptop later):**
+1. Install Tailscale:
+   - **Mac:** Mac App Store → search **Tailscale**, or download it from **tailscale.com/download/mac**.
+   - **Windows:** download the installer from **tailscale.com/download/windows** and run it.
+2. Open Tailscale. Click its icon (Mac: menu bar at the top right; Windows: system tray at the bottom right, possibly under **^**) → **Log in**, and sign in with your Google account.
+3. Allow it to add a VPN configuration when asked (Mac: System Settings may ask you to approve it).
+4. Click the icon again. Under **This Device** you'll see its Tailscale address, `100.x.y.z`. Click it to copy it.
+
+**On your iPhone:**
+1. App Store → install **Tailscale**.
+2. Open it → sign in with the **same Google account** → **Allow** the VPN configuration.
+3. Make sure the switch at the top is **on** (connected).
+4. In Safari, open `http://100.x.y.z:8080` (the computer's address from step 4) → **Share → Add to Home Screen**.
+
+**Check it works away from home:** turn off the iPhone's Wi-Fi and open the page on mobile data.
+**Optional:** on the clips page → Settings → *Address of this page, for alert links*, enter `http://100.x.y.z:8080` so alert links work anywhere.
+
+**If the page doesn't open:**
+- Tailscale must be on and connected on **both** devices, signed in to the same account.
+- The recorder must be running and the computer awake.
+- Mac: if macOS asked "Do you want **node** to accept incoming connections?", choose **Allow**. Otherwise check System Settings → Network → Firewall.
+- Windows: if Windows Firewall asks about **Node.js**, tick **Private networks** and click **Allow**.
+
+## Troubleshooting
+| Problem | What to do |
+|---|---|
+| Anything | `npm run doctor`: checks everything and says how to fix each problem |
+| No clips appear after a ring | Run `npm run debug` and ring the bell. You should see `notification from Ring…`. If the **Ring events** check in `npm run doctor` fails, a VPN, ad blocker or firewall is blocking Google's push service (mtalk.google.com, port 5228) |
+| `Ring login failed` or no `watching …` line | `npm run login` |
+| Forgot the Settings PIN | `npm run pin` on the recording computer |
+| Errors after updating | `npm install` (it also re-applies a needed fix to a Ring library) |
+
 ## Updating later
-Download the ZIP again and replace the app files. Keep `.env`, `.ring-token` and your clips. Or run `git pull`. Then run step 1 (prepare) again and restart the recorder.
+Download the ZIP again and replace the app files. Keep `.env`, `.ring-token` and your clips. Or run `git pull`. Then run `npm install` (or step 1, prepare, again) and restart the recorder.
