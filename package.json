@@ -8,6 +8,7 @@
     "node": ">=22"
   },
   "scripts": {
+    "postinstall": "node scripts/patch-push-receiver.cjs",
     "setup": "node src/setup.js",
     "login": "node src/setup.js --login-only",
     "doctor": "node src/doctor.js",
