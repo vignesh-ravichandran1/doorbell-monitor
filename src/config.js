@@ -16,7 +16,10 @@ export const config = {
   ringRefreshToken: env('RING_REFRESH_TOKEN', ''),
   tokenFile: path.join(APP_DIR, '.ring-token'),
   recordingsDir: path.resolve(APP_DIR, env('RECORDINGS_PATH', 'recordings')),
-  recordSeconds: Number(env('RECORD_SECONDS', '30')),
+  // Rings default longer than motion; RECORD_SECONDS is the older single setting (motion fallback).
+  recordSecondsDing: Number(env('RECORD_SECONDS_DING', '60')),
+  recordSecondsMotion: Number(env('RECORD_SECONDS_MOTION', env('RECORD_SECONDS', '30'))),
+  maxClipSeconds: Number(env('MAX_CLIP_SECONDS', '120')),
   recordOn: list('RECORD_ON', 'ding,motion'),
   notifyOn: list('NOTIFY_ON', ''),
   motionCooldownSeconds: Number(env('MOTION_COOLDOWN_SECONDS', '120')),

@@ -1,18 +1,17 @@
 // Listens for Ring ding/motion events, records a clip of each from the live view,
 // purges old clips, and serves a page to watch them. No Ring subscription needed.
-import { execFile } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
-import { promisify } from 'node:util'
 import { RingApi } from 'ring-client-api'
 import { enableDebug, useLogger } from 'ring-client-api/util'
-import { filter, firstValueFrom } from 'rxjs'
+import { filter } from 'rxjs'
+import { ClipSession } from './clip-session.js'
+import { record } from './recorder.js'
 import { config, findFfmpeg, loadToken, saveToken } from './config.js'
 import { startServer } from './server.js'
-import { clipPath, prune } from './storage.js'
+import { prune } from './storage.js'
 
 const log = (...args) => console.log(new Date().toLocaleString(), ...args)
-const run = promisify(execFile)
 
 // ring-client-api is silent by default; show its messages (e.g. push connection errors) in our log.
 useLogger({
@@ -47,28 +46,6 @@ function housekeeping() {
   }
 }
 
-async function record(camera, event, ffmpeg) {
-  const started = new Date()
-  const clip = clipPath(config.recordingsDir, started, event, camera.id)
-  fs.mkdirSync(path.dirname(clip), { recursive: true })
-  const call = await camera.streamVideo({
-    output: ['-t', String(config.recordSeconds), '-movflags', '+faststart', clip],
-  })
-  const timeout = new Promise((resolve) => setTimeout(resolve, (config.recordSeconds + 60) * 1000))
-  await Promise.race([firstValueFrom(call.onCallEnded), timeout])
-  call.stop()
-
-  if (!fs.existsSync(clip) || fs.statSync(clip).size < 10_000) {
-    fs.rmSync(clip, { force: true })
-    throw new Error('no video received from the doorbell')
-  }
-  const thumb = clip.replace(/\.mp4$/, '.jpg')
-  await run(ffmpeg, ['-hide_banner', '-loglevel', 'error', '-y', '-ss', '2', '-i', clip,
-    '-frames:v', '1', '-vf', 'scale=640:-2', thumb]).catch(() => {})
-  log(`saved ${path.relative(config.recordingsDir, clip)}`)
-  return { clip, thumb, started }
-}
-
 async function main() {
   const token = loadToken()
   if (!token) {
@@ -88,7 +65,7 @@ async function main() {
 
   const cameras = await ring.getCameras()
   if (!cameras.length) log('no Ring cameras or doorbells found on this account')
-  const busy = new Set()
+  const recording = new Map() // camera id -> ClipSession in progress
   const lastMotionAlert = new Map()
 
   const handle = async (camera, event) => {
@@ -102,10 +79,22 @@ async function main() {
           'Recording a clip now', { priority: event === 'ding' ? 'high' : 'default', click: config.webBaseUrl || undefined })
       }
     }
-    if (!config.recordOn.has(event) || busy.has(camera.id)) return // the clip in progress covers it
-    busy.add(camera.id)
+    if (!config.recordOn.has(event)) return
+    const current = recording.get(camera.id)
+    if (current) {
+      current.extend(event) // keep recording the same visit instead of starting a new clip
+      log(`${event} during recording: clip extended to ${current.wanted}s`)
+      return
+    }
+    const session = new ClipSession(event, {
+      dingSeconds: config.recordSecondsDing,
+      motionSeconds: config.recordSecondsMotion,
+      maxSeconds: config.maxClipSeconds,
+    })
+    recording.set(camera.id, session)
     try {
-      const { clip, thumb, started } = await record(camera, event, ffmpeg)
+      const { clip, thumb, started } = await record(camera, session, { ffmpeg, recordingsDir: config.recordingsDir, maxClipSeconds: config.maxClipSeconds, log })
+      event = session.event
       if (config.notifyOn.has(event)) {
         const rel = path.relative(config.recordingsDir, clip).split(path.sep).join('/')
         notify(`${camera.name}: clip saved (${event})`, started.toLocaleTimeString(),
@@ -114,7 +103,7 @@ async function main() {
     } catch (e) {
       log(`recording at ${camera.name} failed:`, e.message)
     } finally {
-      busy.delete(camera.id)
+      recording.delete(camera.id)
       housekeeping()
     }
   }

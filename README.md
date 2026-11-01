@@ -3,7 +3,7 @@
 Record every ring and motion event from your Ring doorbell **without a Ring Protect subscription**.
 It's one small Node.js program, with no Docker. It runs on **macOS, Windows 10/11 and Linux**, including old laptops.
 
-- Records a 30-second clip of each ring and motion event from Ring's free live view.
+- Records each ring (60 s) and motion event (30 s) from Ring's free live view. If activity continues, the same clip keeps recording, up to 2 minutes.
 - Keeps as many clips as fit: the oldest are deleted only when the space you set (default **20 GB**) is full.
 - Clips page for any phone or computer on your home Wi-Fi (`http://<computer-ip>:8080`), with filters by day and by rings vs. motion, plus a storage meter.
 - Optional phone alerts through [ntfy](https://ntfy.sh). Off by default, since the Ring app already alerts you.
@@ -35,7 +35,9 @@ Your Ring email and password go only to Ring. Only a login token is kept, in `.r
 | `MAX_STORAGE_GB` | `20` | Space for all clips; the oldest are deleted only when it's full (`0` = no cap) |
 | `MIN_FREE_GB` | `5` | Also purge if the disk itself gets this low |
 | `KEEP_DAYS` | `0` (off) | Optional: also delete clips older than this many days |
-| `RECORD_SECONDS` | `30` | Clip length |
+| `RECORD_SECONDS_DING` | `60` | Length of clips that start with a ring |
+| `RECORD_SECONDS_MOTION` | `30` | Length of clips that start with motion |
+| `MAX_CLIP_SECONDS` | `120` | New rings/motion during a clip extend it, up to this length |
 | `RECORD_ON` | `ding,motion` | Events that record a clip |
 | `NOTIFY_ON` | *(empty = off)* | Events that send an ntfy alert (`ding`, `motion`) |
 
