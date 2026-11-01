@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 
 export const APP_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
-const envFile = path.join(APP_DIR, '.env')
+export const envFile = path.join(APP_DIR, '.env')
 if (fs.existsSync(envFile)) process.loadEnvFile(envFile)
 
 const env = (name, fallback) => process.env[name] ?? fallback
@@ -28,4 +28,36 @@ export const config = {
   ntfyUrl: env('NTFY_URL', 'https://ntfy.sh').replace(/\/$/, ''),
   ntfyTopic: env('NTFY_TOPIC', ''),
   ntfyToken: env('NTFY_TOKEN', ''),
+}
+
+/** The newest Ring token: .ring-token (kept up to date by the app) beats .env. */
+export function loadToken() {
+  if (fs.existsSync(config.tokenFile)) return fs.readFileSync(config.tokenFile, 'utf8').trim()
+  return config.ringRefreshToken
+}
+
+export function saveToken(token) {
+  fs.writeFileSync(config.tokenFile, token, { mode: 0o600 })
+}
+
+/** ffmpeg bundled by npm install, else one installed on the system. */
+export async function findFfmpeg() {
+  try {
+    const { default: bundled } = await import('ffmpeg-for-homebridge')
+    if (bundled) return bundled
+  } catch {}
+  return 'ffmpeg'
+}
+
+/** Set KEY=value lines in .env text, keeping comments; appends keys that are missing. */
+export function updateEnvText(text, values) {
+  let out = text
+  for (const [key, raw] of Object.entries(values)) {
+    const value = /[\s#"']/.test(String(raw)) ? `"${String(raw).replace(/"/g, '\\"')}"` : String(raw)
+    const re = new RegExp(`^${key}=([^#\\n]*?)(\\s+#.*)?$`, 'm')
+    out = re.test(out)
+      ? out.replace(re, (_, _old, comment = '') => `${key}=${value}${comment}`)
+      : `${out.replace(/\n?$/, '\n')}${key}=${value}\n`
+  }
+  return out
 }

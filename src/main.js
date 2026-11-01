@@ -6,25 +6,12 @@ import path from 'node:path'
 import { promisify } from 'node:util'
 import { RingApi } from 'ring-client-api'
 import { filter, firstValueFrom } from 'rxjs'
-import { config } from './config.js'
+import { config, findFfmpeg, loadToken, saveToken } from './config.js'
 import { startServer } from './server.js'
 import { clipPath, prune, writeIndex } from './storage.js'
 
 const log = (...args) => console.log(new Date().toLocaleString(), ...args)
 const run = promisify(execFile)
-
-async function findFfmpeg() {
-  try {
-    const { default: bundled } = await import('ffmpeg-for-homebridge')
-    if (bundled) return bundled
-  } catch {}
-  return 'ffmpeg' // fall back to one installed on the system
-}
-
-function loadToken() {
-  if (fs.existsSync(config.tokenFile)) return fs.readFileSync(config.tokenFile, 'utf8').trim()
-  return config.ringRefreshToken
-}
 
 async function notify(title, message, { priority = 'default', image, click } = {}) {
   if (!config.ntfyTopic) return
@@ -78,7 +65,7 @@ async function record(camera, event, ffmpeg) {
 async function main() {
   const token = loadToken()
   if (!token) {
-    console.error('No Ring login yet. Run "npm run login", then put the token in .env as RING_REFRESH_TOKEN=...')
+    console.error('No Ring login yet. Run: npm run setup')
     process.exit(1)
   }
   fs.mkdirSync(config.recordingsDir, { recursive: true })
@@ -89,7 +76,7 @@ async function main() {
   const ring = new RingApi({ refreshToken: token, ffmpegPath: ffmpeg })
   // Ring replaces the token regularly; the old one stops working, so always keep the newest.
   ring.onRefreshTokenUpdated.subscribe(({ newRefreshToken }) => {
-    fs.writeFileSync(config.tokenFile, newRefreshToken)
+    saveToken(newRefreshToken)
   })
 
   const cameras = await ring.getCameras()

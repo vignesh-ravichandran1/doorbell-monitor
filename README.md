@@ -11,57 +11,22 @@ It's one small Node.js program, with no Docker. It runs on **macOS, Windows 10/1
 Planned features are in [ROADMAP.md](ROADMAP.md), such as keeping important clips forever.
 
 ## Requirements
-- **Node.js 22 LTS or newer** ([nodejs.org](https://nodejs.org)). It bundles its own ffmpeg, so there's nothing else to install.
+- **Node.js 22 or newer.** The prepare step installs it for you, and ffmpeg comes bundled.
 - About 150 MB of memory. Any laptop from 2010 onwards is fine.
 - **Windows 10 or 11, macOS 11+ or any current Linux.** Windows 7 and 8 can't run Node.js 22 (or any current runtime). On such a laptop, install a free, lightweight Linux such as [Linux Mint XFCE](https://linuxmint.com) or [Lubuntu](https://lubuntu.me).
 
-## Your Ring login stays on your computer
-`npm run login` runs Ring's own sign-in **in your terminal**. You type your email, password and 2-step code there, and they go only to Ring. You get back a token, which is stored in `.env` / `.ring-token` on that computer. Both files are git-ignored, so they never reach GitHub or anyone else.
+## Get started
+**Step-by-step guide for Mac and Windows: [SETUP.md](SETUP.md)**
 
-To cut access at any time, open the Ring app → **Control Center → Authorized Client Devices** and remove the device.
+| Step | Mac / Linux | Windows |
+|---|---|---|
+| 1. Prepare (checks the computer, installs what's missing) | `bash prepare.sh` | double-click `prepare.bat` |
+| 2. Setup (Ring login, settings, optional 24/7 auto-start) | `npm run setup` | `npm run setup` |
+| 3. Run | `npm start` | `npm start` |
 
-## Two environments: test (Mac) and production (laptop)
-Each computer is its own environment, with its own `.env` file and its own Ring login. Don't copy `.env` between computers: Ring replaces the token regularly, and the copy on the other machine stops working. Run `npm run login` on each computer instead. Use different settings per machine as you like, for example `KEEP_DAYS=2` and `MAX_STORAGE_GB=2` on the Mac.
+Check everything at any time with `npm run doctor`.
 
-## Install (the same on every computer)
-1. Install **Node.js 22 LTS** from [nodejs.org](https://nodejs.org) using the normal installer.
-2. Get the code. Either download it from GitHub (**Code → Download ZIP**, then unzip), or run:
-   ```
-   git clone https://github.com/vignesh-ravichandran1/doorbell-monitor.git
-   ```
-3. Open a terminal in that folder. On Windows, open the folder in File Explorer, type `cmd` in the address bar and press Enter. Then run:
-   ```
-   npm install
-   npm run login
-   ```
-4. Copy `.env.example` to a new file named `.env`. Paste the token from step 3 after `RING_REFRESH_TOKEN=` and adjust any settings.
-5. Start it:
-   ```
-   npm start
-   ```
-   You should see `watching Front Door`. Ring the doorbell, and about 40 seconds later the clip is at **http://localhost:8080**.
-
-## Keep it running
-
-**Mac (testing):** The Mac must stay awake, because recording stops when it sleeps or the lid closes. Run `caffeinate -i npm start` and keep the Mac plugged in. Stop it with Ctrl+C.
-
-**Windows laptop (24/7):** Double-click `windows\setup-windows.bat` once. It stops sleep on mains power, keeps running with the lid closed, and starts the recorder at sign-in. Then double-click `windows\start-doorbell.bat`, or just restart the laptop.
-To survive power cuts, also set Windows to sign in automatically (run `netplwiz` and untick *Users must enter a user name and password*). If the BIOS has a *Power on AC* option, turn it on too.
-
-**Linux laptop (24/7):** Edit `linux/doorbell.service` (your username and folder), then:
-```
-sudo cp linux/doorbell.service /etc/systemd/system/ && sudo systemctl enable --now doorbell
-```
-Set the lid to do nothing in the power settings, or set `HandleLidSwitch=ignore` in `/etc/systemd/logind.conf`.
-
-**On every machine:** In the Bell Home Hub (`192.168.2.1` → DHCP), reserve the computer's IP address so the clips page address never changes. Don't forward any ports.
-
-## Updating
-```
-git pull        (or download the ZIP again and keep your .env)
-npm install
-```
-Then restart the app.
+Your Ring email and password go only to Ring. Only a login token is kept, in `.ring-token` on that computer. It and your `.env` settings are never uploaded. Each computer (Mac for testing, laptop for 24/7) gets its own login and settings.
 
 ## Settings (`.env`)
 | Setting | Default | Meaning |
@@ -74,7 +39,7 @@ Then restart the app.
 | `RECORD_ON` | `ding,motion` | Events that record a clip |
 | `NOTIFY_ON` | *(empty = off)* | Events that send an ntfy alert (`ding`, `motion`) |
 
-Purging runs after every clip and once an hour. Restart the app after changing `.env`.
+Purging runs after every clip and once an hour. Change these by running `npm run setup` again, or edit `.env`, then restart the app.
 
 ## Watching clips when you're away (optional)
 Install [Tailscale](https://tailscale.com) (free) on the laptop and on your iPhone, and sign in to both with the same account. Then open `http://<laptop's Tailscale IP>:8080` from anywhere. It stays private and no ports are opened.
@@ -84,7 +49,7 @@ Install [Tailscale](https://tailscale.com) (free) on the laptop and on your iPho
 - **Battery doorbells:** each clip is a live-view session, which uses battery. On a battery model, set `RECORD_ON=ding`.
 - The Ring app works exactly as before: live view, talk and alerts.
 - This uses Ring's unofficial API through [ring-client-api](https://github.com/dgreif/ring). If Ring changes something, update (see above).
-- **If `npm start` shows the clips page line but never shows `watching ...`**, your token has expired. Delete `.ring-token`, run `npm run login` again and update `.env`.
+- **If `npm start` shows the clips page line but never shows `watching ...`**, run `npm run doctor`. If the Ring login has expired, run `npm run login`.
 - A 30-second clip is about 5–15 MB, so 20 GB holds roughly 1,500–4,000 clips.
 
 ## Development
