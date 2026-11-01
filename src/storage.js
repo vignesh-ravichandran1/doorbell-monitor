@@ -91,5 +91,7 @@ export function clipSummary(root) {
       size,
     }
   })
+  // Newest first by date and time only; ring vs motion never affects the order.
+  clips.sort((a, b) => `${b.day} ${b.time}`.localeCompare(`${a.day} ${a.time}`))
   return { clips, usedBytes }
 }

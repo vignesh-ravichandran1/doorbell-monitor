@@ -72,3 +72,19 @@ test('clipSummary lists newest first with thumbnails and total size', () => {
   assert.equal(clips[0].thumb, '/2026-01-31/093015_motion_a.jpg')
   assert.equal(usedBytes, 10 + 1 + 20 + 1)
 })
+
+test('clipSummary orders rings and motion together, newest first', () => {
+  const root = tmp()
+  for (const name of ['090000_ding_a.mp4', '100000_motion_a.mp4', '110000_ding_a.mp4', '113000_motion_a.mp4']) {
+    makeClip(root, '2026-01-31', name)
+  }
+  makeClip(root, '2026-02-01', '070000_motion_a.mp4')
+  const order = clipSummary(root).clips.map((c) => `${c.day} ${c.time} ${c.event}`)
+  assert.deepEqual(order, [
+    '2026-02-01 07:00:00 motion',
+    '2026-01-31 11:30:00 motion',
+    '2026-01-31 11:00:00 ding',
+    '2026-01-31 10:00:00 motion',
+    '2026-01-31 09:00:00 ding',
+  ])
+})

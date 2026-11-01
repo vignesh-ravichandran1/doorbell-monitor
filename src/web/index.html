@@ -339,7 +339,8 @@ function renderFilters() {
 }
 
 function renderList() {
-  shown = data.clips.filter(matches)
+  // Strictly newest first by date + time, rings and motion mixed together.
+  shown = data.clips.filter(matches).sort((a, b) => `${b.day} ${b.time}`.localeCompare(`${a.day} ${a.time}`))
   $('count').textContent = `${shown.length} clip${shown.length === 1 ? '' : 's'}`
   const list = $('list')
   list.replaceChildren()
