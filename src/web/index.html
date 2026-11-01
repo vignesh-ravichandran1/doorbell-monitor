@@ -22,9 +22,9 @@
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
 body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
-.wrap { max-width: 1100px; margin: 0 auto; padding: 0 16px; }
+.wrap { max-width: 1100px; margin: 0 auto; padding: 0 max(16px, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(16px, env(safe-area-inset-left)); }
 
-header { padding: 20px 0 12px; }
+header { padding: max(20px, env(safe-area-inset-top)) 0 12px; }
 h1 { font-size: 22px; margin: 0 0 10px; letter-spacing: -.01em; }
 .meter { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
 .meter > i { display: block; height: 100%; width: 0; background: var(--meter); transition: width .3s; }
@@ -63,6 +63,18 @@ dialog::backdrop { background: rgba(0,0,0,.75); }
 dialog video { width: 100%; max-height: 75vh; display: block; background: #000; }
 .bar { display: flex; gap: 8px; align-items: center; padding: 10px 12px; flex-wrap: wrap; }
 .bar .title { flex: 1; min-width: 160px; font-size: 14px; }
+@media (max-width: 700px) {
+  dialog { margin: auto 0; width: 100vw; }
+  .bar { padding-bottom: max(10px, env(safe-area-inset-bottom)); }
+  .bar .title { flex-basis: 100%; }
+  .bar button, .bar a { flex: 1; text-align: center; padding: 10px 8px; }
+}
+@media (pointer: coarse) {
+  .chip, .tabs button { min-height: 38px; }
+  /* iPhone Safari zooms into any text box under 16px; keep them at 16px */
+  input[type=text], input[type=number], input[type=password], input[type=date] { font-size: 16px !important; }
+  .checks input { width: 20px; height: 20px; }
+}
 .bar button, .bar a { background: #2a2a2a; color: #fff; border: 0; border-radius: 8px; padding: 8px 12px; font: inherit; font-size: 14px; cursor: pointer; text-decoration: none; }
 .bar button:disabled { opacity: .35; cursor: default; }
 
@@ -261,6 +273,11 @@ const today = () => isoDay(new Date())
 const daysAgo = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return isoDay(d) }
 const gb = (b) => b < 1024 ** 3 ? `${Math.round(b / 1024 ** 2)} MB` : `${(b / 1024 ** 3).toFixed(b >= 10 * 1024 ** 3 ? 0 : 1)} GB`
 const label = { ding: 'Ring', motion: 'Motion' }
+// "14:08:29" -> "2:08:29 PM"
+const fmtTime = (t) => {
+  const [h, m, sec] = t.split(':').map(Number)
+  return `${h % 12 || 12}:${pad(m)}:${pad(sec)} ${h < 12 ? 'AM' : 'PM'}`
+}
 
 function dayTitle(day) {
   if (day === today()) return 'Today'
@@ -345,7 +362,7 @@ function renderList() {
     const card = document.createElement('button')
     card.className = 'card'
     card.innerHTML = `<div class="thumb">${c.thumb ? `<img loading="lazy" alt="" src="${c.thumb}">` : '<div class="none">No preview</div>'}` +
-      `<span class="badge ${c.event}">${label[c.event] || c.event}</span></div><div class="meta">${c.time}</div>`
+      `<span class="badge ${c.event}">${label[c.event] || c.event}</span></div><div class="meta">${fmtTime(c.time)}</div>`
     card.addEventListener('click', () => openClip(i))
     grid.append(card)
   })
@@ -357,7 +374,7 @@ function openClip(i) {
   current = i
   const c = shown[i]
   $('video').src = c.url
-  $('vtitle').textContent = `${label[c.event] || c.event} · ${dayTitle(c.day)}, ${c.time}`
+  $('vtitle').textContent = `${label[c.event] || c.event} · ${dayTitle(c.day)}, ${fmtTime(c.time)}`
   $('download').href = c.url
   $('newer').disabled = i === 0
   $('older').disabled = i === shown.length - 1
