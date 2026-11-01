@@ -1,6 +1,4 @@
+node_modules/
 .env
-ring-mqtt/*
-!ring-mqtt/.gitkeep
+.ring-token
 recordings/
-__pycache__/
-.pytest_cache/

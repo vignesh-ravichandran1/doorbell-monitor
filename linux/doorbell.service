@@ -1,0 +1,16 @@
+# Auto-start on Linux. Edit User and WorkingDirectory, then:
+#   sudo cp linux/doorbell.service /etc/systemd/system/ && sudo systemctl enable --now doorbell
+[Unit]
+Description=Ring doorbell recorder
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=YOUR_USER
+WorkingDirectory=/home/YOUR_USER/doorbell-monitor
+ExecStart=/usr/bin/env npm start
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

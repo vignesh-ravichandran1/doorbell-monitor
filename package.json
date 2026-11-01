@@ -1,0 +1,22 @@
+{
+  "name": "doorbell-monitor",
+  "version": "2.0.0",
+  "description": "Record Ring doorbell events locally without a Ring subscription. Runs on Mac, Windows 10/11 and Linux.",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "login": "ring-auth-cli",
+    "start": "node src/main.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "ring-client-api": "^14.3.0",
+    "rxjs": "^7.8.1"
+  },
+  "optionalDependencies": {
+    "ffmpeg-for-homebridge": "^2.2.2"
+  }
+}
