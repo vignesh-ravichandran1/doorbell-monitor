@@ -10,18 +10,26 @@ import { APP_DIR, config, envFile, loadToken, saveToken, updateEnvText } from '.
 
 const loginOnly = process.argv.includes('--login-only')
 
-// One readline for the whole session; `muted` hides the password while typing.
-let muted = false
+// One readline for the whole session. While `secretPrompt` is set, typed characters are
+// hidden but the prompt itself is still drawn (readline redraws it when the line changes).
+let secretPrompt = null
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: true })
-rl._writeToOutput = (s) => { if (!muted || s.includes('\n')) rl.output.write(muted ? '\n' : s) }
+rl._writeToOutput = (s) => {
+  if (secretPrompt === null) rl.output.write(s)
+  else if (s.includes('\n')) rl.output.write('\n')
+  else if (s.startsWith(secretPrompt)) rl.output.write(secretPrompt)
+}
 const ask = (q, fallback = '') => new Promise((resolve) =>
   rl.question(fallback !== '' ? `${q} [${fallback}]: ` : `${q}: `, (a) => resolve(a.trim() || String(fallback))))
 const askSecret = async (q) => {
-  rl.output.write(`${q}: `)
-  muted = true
-  const answer = await new Promise((resolve) => rl.question('', resolve))
-  muted = false
-  return answer
+  const prompt = `${q}: `
+  const answer = new Promise((resolve) => rl.question(prompt, resolve)) // draws the prompt now
+  secretPrompt = prompt
+  try {
+    return await answer
+  } finally {
+    secretPrompt = null
+  }
 }
 const yes = async (q, def = false) => /^y/i.test(await ask(`${q} (y/n)`, def ? 'y' : 'n'))
 
@@ -33,6 +41,7 @@ async function ringLogin() {
   for (;;) {
     const email = await ask('Ring email')
     const password = await askSecret('Ring password (hidden)')
+    console.log('Contacting Ring...')
     const client = new RingRestClient({ email, password })
     try {
       let auth
