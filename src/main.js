@@ -9,7 +9,7 @@ import { enableDebug, useLogger } from 'ring-client-api/util'
 import { filter, firstValueFrom } from 'rxjs'
 import { config, findFfmpeg, loadToken, saveToken } from './config.js'
 import { startServer } from './server.js'
-import { clipPath, prune, writeIndex } from './storage.js'
+import { clipPath, prune } from './storage.js'
 
 const log = (...args) => console.log(new Date().toLocaleString(), ...args)
 const run = promisify(execFile)
@@ -42,7 +42,6 @@ async function notify(title, message, { priority = 'default', image, click } = {
 function housekeeping() {
   try {
     prune(config.recordingsDir, { ...config, log })
-    writeIndex(config.recordingsDir)
   } catch (e) {
     log('housekeeping failed:', e.message)
   }
@@ -78,7 +77,7 @@ async function main() {
   }
   fs.mkdirSync(config.recordingsDir, { recursive: true })
   housekeeping()
-  startServer(config.recordingsDir, config.webPort, log)
+  startServer(config.recordingsDir, config.webPort, { maxStorageGb: config.maxStorageGb, keepDays: config.keepDays }, log)
 
   const ffmpeg = await findFfmpeg()
   const ring = new RingApi({ refreshToken: token, ffmpegPath: ffmpeg })

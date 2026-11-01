@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { test } from 'node:test'
-import { clipPath, prune, writeIndex } from '../src/storage.js'
+import { clipPath, clipSummary, prune } from '../src/storage.js'
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'doorbell-'))
 const quiet = () => {}
@@ -56,12 +56,19 @@ test('a zero cap means unlimited', () => {
   assert.ok(fs.existsSync(clip))
 })
 
-test('writeIndex lists newest first with posters', () => {
+test('age limit is off by default (keepDays 0): old clips stay while there is space', () => {
   const root = tmp()
-  makeClip(root, '2026-01-30', '080000_ding_a.mp4')
-  makeClip(root, '2026-01-31', '093015_motion_a.mp4')
-  writeIndex(root)
-  const page = fs.readFileSync(path.join(root, 'index.html'), 'utf8')
-  assert.ok(page.indexOf('2026-01-31') < page.indexOf('2026-01-30'))
-  assert.ok(page.includes('09:30:15') && page.includes('poster="2026-01-31/093015_motion_a.jpg"'))
+  const old = makeClip(root, '2020-01-01', '120000_ding_a.mp4')
+  prune(root, { keepDays: 0, maxStorageGb: 1, minFreeGb: 0, now: new Date(2026, 1, 1), getFree: plenty, log: quiet })
+  assert.ok(fs.existsSync(old))
+})
+
+test('clipSummary lists newest first with thumbnails and total size', () => {
+  const root = tmp()
+  makeClip(root, '2026-01-30', '080000_ding_a.mp4', 10)
+  makeClip(root, '2026-01-31', '093015_motion_a.mp4', 20)
+  const { clips, usedBytes } = clipSummary(root)
+  assert.deepEqual(clips.map((c) => [c.day, c.time, c.event]), [['2026-01-31', '09:30:15', 'motion'], ['2026-01-30', '08:00:00', 'ding']])
+  assert.equal(clips[0].thumb, '/2026-01-31/093015_motion_a.jpg')
+  assert.equal(usedBytes, 10 + 1 + 20 + 1)
 })

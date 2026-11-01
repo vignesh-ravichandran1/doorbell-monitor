@@ -4,8 +4,8 @@ Record every ring and motion event from your Ring doorbell **without a Ring Prot
 It's one small Node.js program, with no Docker. It runs on **macOS, Windows 10/11 and Linux**, including old laptops.
 
 - Records a 30-second clip of each ring and motion event from Ring's free live view.
-- Purges old clips automatically by age (default **14 days**) and by total size (default **20 GB**).
-- Serves a page to watch clips from any phone or computer on your home Wi-Fi: `http://<computer-ip>:8080`.
+- Keeps as many clips as fit: the oldest are deleted only when the space you set (default **20 GB**) is full.
+- Clips page for any phone or computer on your home Wi-Fi (`http://<computer-ip>:8080`), with filters by day and by rings vs. motion, plus a storage meter.
 - Optional phone alerts through [ntfy](https://ntfy.sh). Off by default, since the Ring app already alerts you.
 
 Planned features are in [ROADMAP.md](ROADMAP.md), such as keeping important clips forever.
@@ -32,9 +32,9 @@ Your Ring email and password go only to Ring. Only a login token is kept, in `.r
 | Setting | Default | Meaning |
 |---|---|---|
 | `RECORDINGS_PATH` | `recordings` | Where clips go, e.g. `E:/doorbell` for an external disk on Windows |
-| `KEEP_DAYS` | `14` | Delete clips older than this many days |
-| `MAX_STORAGE_GB` | `20` | Keep all clips together under this size; the oldest go first (`0` = no cap) |
+| `MAX_STORAGE_GB` | `20` | Space for all clips; the oldest are deleted only when it's full (`0` = no cap) |
 | `MIN_FREE_GB` | `5` | Also purge if the disk itself gets this low |
+| `KEEP_DAYS` | `0` (off) | Optional: also delete clips older than this many days |
 | `RECORD_SECONDS` | `30` | Clip length |
 | `RECORD_ON` | `ding,motion` | Events that record a clip |
 | `NOTIFY_ON` | *(empty = off)* | Events that send an ntfy alert (`ding`, `motion`) |

@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Doorbell">
+<title>Doorbell Clips</title>
+<style>
+:root {
+  --bg: #f6f6f4; --surface: #ffffff; --fg: #1b1b1a; --muted: #6b6b66; --line: #e3e2de;
+  --accent: #2f6fde; --accent-fg: #ffffff; --ring: #c2410c; --motion: #2563eb;
+  --meter: #2f6fde; --meter-warn: #d97706; --shadow: 0 1px 2px rgba(0,0,0,.06), 0 2px 8px rgba(0,0,0,.04);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #121212; --surface: #1c1c1b; --fg: #ecebe7; --muted: #9a9993; --line: #2c2c2a;
+    --accent: #5b8ff0; --accent-fg: #0b0b0b; --ring: #fb923c; --motion: #60a5fa;
+    --meter: #5b8ff0; --meter-warn: #f59e0b; --shadow: none;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+.wrap { max-width: 1100px; margin: 0 auto; padding: 0 16px; }
+
+header { padding: 20px 0 12px; }
+h1 { font-size: 22px; margin: 0 0 10px; letter-spacing: -.01em; }
+.meter { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.meter > i { display: block; height: 100%; width: 0; background: var(--meter); transition: width .3s; }
+.meter.warn > i { background: var(--meter-warn); }
+.stats { margin-top: 6px; font-size: 13px; color: var(--muted); }
+
+.filters { position: sticky; top: 0; z-index: 5; background: var(--bg); padding: 10px 0; border-bottom: 1px solid var(--line); }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.row + .row { margin-top: 8px; }
+.chip { border: 1px solid var(--line); background: var(--surface); color: var(--fg); border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 14px; cursor: pointer; }
+.chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+.date-pick { position: relative; }
+.date-pick input { border: 1px solid var(--line); background: var(--surface); color: var(--fg); border-radius: 999px; padding: 5px 10px; font: inherit; font-size: 14px; }
+.date-pick input.active { border-color: var(--accent); outline: 2px solid var(--accent); outline-offset: -1px; }
+.count { margin-left: auto; font-size: 13px; color: var(--muted); }
+
+main { padding: 8px 0 40px; }
+h2 { font-size: 14px; font-weight: 600; color: var(--muted); margin: 20px 0 10px; display: flex; gap: 8px; }
+h2 span { font-weight: 400; }
+.grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+@media (min-width: 700px) { .grid { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); } }
+.card { background: var(--surface); border-radius: 10px; overflow: hidden; box-shadow: var(--shadow); border: 1px solid var(--line); cursor: pointer; padding: 0; text-align: left; color: inherit; font: inherit; }
+.card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.thumb { position: relative; aspect-ratio: 16 / 9; background: #000; }
+.thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.thumb .none { position: absolute; inset: 0; display: grid; place-items: center; color: #888; font-size: 13px; }
+.badge { position: absolute; left: 8px; top: 8px; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; color: #fff; }
+.badge.ding { background: var(--ring); }
+.badge.motion { background: var(--motion); }
+.meta { padding: 8px 10px; font-size: 14px; font-variant-numeric: tabular-nums; }
+.empty { text-align: center; color: var(--muted); padding: 60px 0; }
+
+dialog { border: 0; padding: 0; background: #000; color: #fff; width: min(960px, 100vw); max-width: 100vw; max-height: 100vh; border-radius: 12px; }
+dialog::backdrop { background: rgba(0,0,0,.75); }
+@media (max-width: 700px) { dialog { border-radius: 0; } }
+dialog video { width: 100%; max-height: 75vh; display: block; background: #000; }
+.bar { display: flex; gap: 8px; align-items: center; padding: 10px 12px; flex-wrap: wrap; }
+.bar .title { flex: 1; min-width: 160px; font-size: 14px; }
+.bar button, .bar a { background: #2a2a2a; color: #fff; border: 0; border-radius: 8px; padding: 8px 12px; font: inherit; font-size: 14px; cursor: pointer; text-decoration: none; }
+.bar button:disabled { opacity: .35; cursor: default; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Doorbell clips</h1>
+    <div class="meter" id="meter" role="progressbar" aria-label="Storage used"><i></i></div>
+    <div class="stats" id="stats">Loading…</div>
+  </header>
+
+  <div class="filters">
+    <div class="row" id="dates">
+      <button class="chip" data-range="all">All</button>
+      <button class="chip" data-range="today">Today</button>
+      <button class="chip" data-range="yesterday">Yesterday</button>
+      <button class="chip" data-range="week">Last 7 days</button>
+      <label class="date-pick"><input type="date" id="day" aria-label="Pick a day"></label>
+    </div>
+    <div class="row" id="types">
+      <button class="chip" data-type="all">All events</button>
+      <button class="chip" data-type="ding">Rings</button>
+      <button class="chip" data-type="motion">Motion</button>
+      <span class="count" id="count"></span>
+    </div>
+  </div>
+
+  <main id="list"></main>
+</div>
+
+<dialog id="viewer">
+  <video id="video" controls playsinline autoplay></video>
+  <div class="bar">
+    <span class="title" id="vtitle"></span>
+    <button id="newer" title="Newer clip (←)">‹ Newer</button>
+    <button id="older" title="Older clip (→)">Older ›</button>
+    <a id="download" download>Download</a>
+    <button id="close">Close</button>
+  </div>
+</dialog>
+
+<script>
+const $ = (id) => document.getElementById(id)
+const state = { range: 'all', day: '', type: 'all' }
+let data = { clips: [], usedBytes: 0, capBytes: 0 }
+let shown = []
+let current = -1
+let loaded = false
+
+const pad = (n) => String(n).padStart(2, '0')
+const isoDay = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+const today = () => isoDay(new Date())
+const daysAgo = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return isoDay(d) }
+const gb = (b) => b < 1024 ** 3 ? `${Math.round(b / 1024 ** 2)} MB` : `${(b / 1024 ** 3).toFixed(b >= 10 * 1024 ** 3 ? 0 : 1)} GB`
+const label = { ding: 'Ring', motion: 'Motion' }
+
+function dayTitle(day) {
+  if (day === today()) return 'Today'
+  if (day === daysAgo(1)) return 'Yesterday'
+  const [y, m, d] = day.split('-').map(Number)
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: y === new Date().getFullYear() ? undefined : 'numeric' })
+}
+
+// Filters live in the URL (#range=week&type=ding) so reload and Back keep them.
+function readHash() {
+  const p = new URLSearchParams(location.hash.slice(1))
+  state.range = p.get('range') || (p.get('day') ? 'day' : 'all')
+  state.day = p.get('day') || ''
+  state.type = p.get('type') || 'all'
+}
+function writeHash() {
+  const p = new URLSearchParams()
+  if (state.range === 'day') p.set('day', state.day)
+  else if (state.range !== 'all') p.set('range', state.range)
+  if (state.type !== 'all') p.set('type', state.type)
+  history.replaceState(null, '', p.toString() ? `#${p}` : location.pathname)
+}
+
+function matches(c) {
+  if (state.type !== 'all' && c.event !== state.type) return false
+  switch (state.range) {
+    case 'today': return c.day === today()
+    case 'yesterday': return c.day === daysAgo(1)
+    case 'week': return c.day >= daysAgo(6)
+    case 'day': return c.day === state.day
+    default: return true
+  }
+}
+
+function renderStats() {
+  const { clips, usedBytes, capBytes } = data
+  const pct = capBytes > 0 ? Math.min(100, (usedBytes / capBytes) * 100) : 0
+  $('meter').querySelector('i').style.width = `${capBytes > 0 ? pct : 0}%`
+  $('meter').classList.toggle('warn', pct >= 90)
+  $('meter').setAttribute('aria-valuenow', Math.round(pct))
+  const oldest = clips.length ? dayTitle(clips[clips.length - 1].day) : null
+  $('stats').textContent = [
+    capBytes > 0 ? `${gb(usedBytes)} of ${gb(capBytes)} used` : `${gb(usedBytes)} used`,
+    `${clips.length} clip${clips.length === 1 ? '' : 's'}`,
+    oldest ? `oldest: ${oldest}` : null,
+    capBytes > 0 ? 'oldest clips are removed only when space runs out' : null,
+  ].filter(Boolean).join(' · ')
+  if (clips.length) {
+    $('day').min = clips[clips.length - 1].day
+    $('day').max = clips[0].day
+  }
+}
+
+function renderFilters() {
+  for (const b of $('dates').querySelectorAll('.chip')) b.setAttribute('aria-pressed', b.dataset.range === state.range)
+  for (const b of $('types').querySelectorAll('.chip')) b.setAttribute('aria-pressed', b.dataset.type === state.type)
+  $('day').value = state.range === 'day' ? state.day : ''
+  $('day').classList.toggle('active', state.range === 'day')
+}
+
+function renderList() {
+  shown = data.clips.filter(matches)
+  $('count').textContent = `${shown.length} clip${shown.length === 1 ? '' : 's'}`
+  const list = $('list')
+  list.replaceChildren()
+  if (!shown.length) {
+    const msg = data.clips.length ? 'No clips match these filters.' : 'No clips yet. Ring the doorbell to record the first one.'
+    list.innerHTML = `<p class="empty">${msg}</p>`
+    return
+  }
+  let grid, lastDay
+  shown.forEach((c, i) => {
+    if (c.day !== lastDay) {
+      lastDay = c.day
+      const n = shown.filter((x) => x.day === c.day).length
+      const h = document.createElement('h2')
+      h.innerHTML = `${dayTitle(c.day)} <span>· ${n}</span>`
+      grid = document.createElement('div')
+      grid.className = 'grid'
+      list.append(h, grid)
+    }
+    const card = document.createElement('button')
+    card.className = 'card'
+    card.innerHTML = `<div class="thumb">${c.thumb ? `<img loading="lazy" alt="" src="${c.thumb}">` : '<div class="none">No preview</div>'}` +
+      `<span class="badge ${c.event}">${label[c.event] || c.event}</span></div><div class="meta">${c.time}</div>`
+    card.addEventListener('click', () => openClip(i))
+    grid.append(card)
+  })
+}
+
+function render() { renderFilters(); renderList(); writeHash() }
+
+function openClip(i) {
+  current = i
+  const c = shown[i]
+  $('video').src = c.url
+  $('vtitle').textContent = `${label[c.event] || c.event} · ${dayTitle(c.day)}, ${c.time}`
+  $('download').href = c.url
+  $('newer').disabled = i === 0
+  $('older').disabled = i === shown.length - 1
+  if (!$('viewer').open) $('viewer').showModal()
+}
+function closeClip() { $('video').pause(); $('video').removeAttribute('src'); $('viewer').close(); current = -1 }
+
+$('dates').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-range]'); if (!b) return
+  state.range = b.dataset.range; render()
+})
+$('types').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-type]'); if (!b) return
+  state.type = b.dataset.type; render()
+})
+$('day').addEventListener('change', (e) => {
+  if (e.target.value) { state.range = 'day'; state.day = e.target.value } else state.range = 'all'
+  render()
+})
+$('newer').addEventListener('click', () => current > 0 && openClip(current - 1))
+$('older').addEventListener('click', () => current < shown.length - 1 && openClip(current + 1))
+$('close').addEventListener('click', closeClip)
+$('viewer').addEventListener('close', () => { $('video').pause(); current = -1 })
+$('viewer').addEventListener('click', (e) => { if (e.target === $('viewer')) closeClip() })
+document.addEventListener('keydown', (e) => {
+  if (!$('viewer').open) return
+  if (e.key === 'ArrowLeft') $('newer').click()
+  if (e.key === 'ArrowRight') $('older').click()
+})
+
+async function load() {
+  try {
+    const res = await fetch('/api/clips', { cache: 'no-store' })
+    const next = await res.json()
+    const changed = next.clips.length !== data.clips.length || next.clips[0]?.url !== data.clips[0]?.url
+    data = next
+    renderStats()
+    if ((changed || !loaded) && current === -1) renderList() // don't reshuffle while a clip is playing
+    loaded = true
+  } catch {
+    $('stats').textContent = "Can't reach the recorder. Is it running?"
+  }
+}
+
+readHash()
+renderFilters()
+load()
+setInterval(load, 30000)
+</script>
+</body>
+</html>

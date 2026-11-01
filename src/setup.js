@@ -86,8 +86,7 @@ async function settings() {
       console.log(`Can't write to ${dir}. Is the disk plugged in? Try another folder.`)
     }
   }
-  values.KEEP_DAYS = await ask('Delete clips older than how many days', config.keepDays)
-  values.MAX_STORAGE_GB = await ask('Maximum space for all clips, in GB (0 = no limit)', config.maxStorageGb)
+  values.MAX_STORAGE_GB = await ask('Space for clips, in GB (the oldest are deleted only when this is full)', config.maxStorageGb)
   const battery = await yes('Is your doorbell battery-powered? (then only rings are recorded, to save battery)',
     !config.recordOn.has('motion'))
   values.RECORD_ON = battery ? 'ding' : 'ding,motion'

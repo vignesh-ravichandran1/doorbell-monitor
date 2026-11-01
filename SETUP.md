@@ -5,7 +5,7 @@ Setup is three commands, the same idea on every computer:
 | Step | What it does | Mac | Windows |
 |---|---|---|---|
 | **1. Prepare** | Checks the computer, installs Node.js if needed, installs the app and ffmpeg, runs machine checks | `bash prepare.sh` | double-click `prepare.bat` |
-| **2. Setup** | Ring login, your settings (clip folder, days to keep, max GB), optional 24/7 auto-start, then all checks | `npm run setup` | `npm run setup` |
+| **2. Setup** | Ring login, your settings (clip folder, space for clips), optional 24/7 auto-start, then all checks | `npm run setup` | `npm run setup` |
 | **3. Run** | Starts recording | `npm start` | `npm start` |
 
 At any time, `npm run doctor` re-checks everything and tells you how to fix what's wrong.
@@ -32,7 +32,7 @@ Each step is safe to run again.
    ```
    - **Ring login:** your Ring email, password (hidden while you type) and the code Ring texts or emails you.
    - **Folder for clips:** press Enter for the default (`recordings` inside the app folder).
-   - **Days / GB:** for testing, small values like `3` days and `2` GB are good.
+   - **Space for clips:** for testing, a small value like `2` GB is fine.
    - **"Is this the one that will record 24/7?"** Answer **n** on the Mac while testing.
 5. **Run:**
    ```
@@ -62,7 +62,7 @@ Windows 7/8 or 32-bit Windows can't run it. `prepare.bat` will tell you so. In t
    ```
    - **Ring login:** same as on the Mac. This laptop gets its **own** login, so don't copy files over from the Mac.
    - **Folder for clips:** your external hard disk, e.g. `E:/doorbell`. Check its drive letter in File Explorer → This PC.
-   - **Days / GB:** e.g. `14` days, and a GB limit that fits your disk.
+   - **Space for clips:** a GB amount that fits your disk, leaving some room. The oldest clips are deleted only when it's full.
    - **"Is this the one that will record 24/7?"** Answer **y**. This sets the laptop to never sleep on mains power and keep running with the lid closed, and it starts the recorder automatically every time you sign in.
 5. **Start it now:** double-click `windows\start-doorbell.bat`, or restart the laptop. A minimised window named *Doorbell recorder* means it's running. If it ever stops, it restarts within 10 seconds.
 6. **Survive power cuts (recommended):** press **Win+R**, type `netplwiz`, untick *Users must enter a user name and password*, and click OK. Windows then signs in and starts recording on its own after a reboot.

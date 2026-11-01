@@ -36,12 +36,13 @@ const freeBytes = (root) => {
 }
 
 /**
- * Delete clips older than keepDays, then oldest-first while all clips together take more
+ * Keep as many clips as fit: delete oldest-first only while all clips together take more
  * than maxStorageGb (0 = no cap) or the disk has less than minFreeGb free.
+ * keepDays > 0 additionally deletes clips older than that (off by default).
  */
 export function prune(root, { keepDays, maxStorageGb, minFreeGb, now = new Date(), getFree = freeBytes, log = console.log }) {
   const today = Date.parse(dayName(now))
-  for (const day of dayDirs(root)) {
+  for (const day of keepDays > 0 ? dayDirs(root) : []) {
     if ((today - Date.parse(day)) / 86400000 > keepDays) {
       log(`pruning ${day} (older than ${keepDays} days)`)
       fs.rmSync(path.join(root, day), { recursive: true, force: true })
@@ -70,46 +71,25 @@ export function prune(root, { keepDays, maxStorageGb, minFreeGb, now = new Date(
   }
 }
 
-const esc = (s) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
-
-/** Write a phone-friendly index.html listing every clip, newest first. */
-export function writeIndex(root) {
-  const rows = []
-  let currentDay
-  for (const clip of listClips(root).reverse()) {
+/** Every clip, newest first, plus total size: the data behind the clips page. */
+export function clipSummary(root) {
+  let usedBytes = 0
+  const clips = listClips(root).reverse().map((clip) => {
     const day = path.basename(path.dirname(clip))
     const name = path.basename(clip)
-    if (day !== currentDay) {
-      rows.push(`<h2>${esc(day)}</h2>`)
-      currentDay = day
-    }
     const [hms, event] = name.split('_')
-    const rel = `${day}/${encodeURIComponent(name)}`
     const thumb = thumbOf(clip)
-    const poster = fs.existsSync(thumb) ? ` poster="${day}/${encodeURIComponent(path.basename(thumb))}"` : ''
-    rows.push(`<figure><video controls preload="none"${poster} src="${rel}"></video>` +
-      `<figcaption>${hms.slice(0, 2)}:${hms.slice(2, 4)}:${hms.slice(4, 6)} &middot; ${esc(event)}` +
-      ` &middot; <a href="${rel}" download>download</a></figcaption></figure>`)
-  }
-  const page = `<!doctype html>
-<html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Doorbell Recordings</title>
-<style>
-:root { color-scheme: light dark; --bg:#fafafa; --fg:#111; --muted:#666; }
-@media (prefers-color-scheme: dark) { :root { --bg:#111; --fg:#eee; --muted:#999; } }
-body { margin:0 auto; padding:16px; max-width:720px; font-family:system-ui,sans-serif; background:var(--bg); color:var(--fg); }
-h2 { font-size:1rem; color:var(--muted); margin:24px 0 8px; }
-figure { margin:0 0 16px; }
-video { width:100%; border-radius:8px; background:#000; }
-figcaption { font-size:.9rem; color:var(--muted); padding-top:4px; }
-a { color:inherit; }
-</style></head><body>
-<h1>Doorbell recordings</h1>
-${rows.join('\n') || '<p>No recordings yet.</p>'}
-</body></html>
-`
-  const tmp = path.join(root, 'index.html.part')
-  fs.writeFileSync(tmp, page)
-  fs.renameSync(tmp, path.join(root, 'index.html'))
+    const hasThumb = fs.existsSync(thumb)
+    const size = sizeOf(clip) + sizeOf(thumb)
+    usedBytes += size
+    return {
+      day,
+      time: `${hms.slice(0, 2)}:${hms.slice(2, 4)}:${hms.slice(4, 6)}`,
+      event,
+      url: `/${day}/${encodeURIComponent(name)}`,
+      thumb: hasThumb ? `/${day}/${encodeURIComponent(path.basename(thumb))}` : null,
+      size,
+    }
+  })
+  return { clips, usedBytes }
 }

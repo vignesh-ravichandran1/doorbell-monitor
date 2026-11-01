@@ -20,7 +20,7 @@ export const config = {
   recordOn: list('RECORD_ON', 'ding,motion'),
   notifyOn: list('NOTIFY_ON', ''),
   motionCooldownSeconds: Number(env('MOTION_COOLDOWN_SECONDS', '120')),
-  keepDays: Number(env('KEEP_DAYS', '14')),
+  keepDays: Number(env('KEEP_DAYS', '0')),
   maxStorageGb: Number(env('MAX_STORAGE_GB', '20')),
   minFreeGb: Number(env('MIN_FREE_GB', '5')),
   webPort: Number(env('WEB_PORT', '8080')),
