@@ -11,6 +11,7 @@
     "postinstall": "node scripts/patch-push-receiver.cjs",
     "setup": "node src/setup.js",
     "login": "node src/setup.js --login-only",
+    "pin": "node src/setup.js --pin-only",
     "doctor": "node src/doctor.js",
     "start": "node src/main.js",
     "debug": "node src/main.js --debug",

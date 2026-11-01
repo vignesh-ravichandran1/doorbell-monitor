@@ -8,7 +8,7 @@ Setup is three commands, the same idea on every computer:
 | **2. Setup** | Ring login, your settings (clip folder, space for clips), optional 24/7 auto-start, then all checks | `npm run setup` | `npm run setup` |
 | **3. Run** | Starts recording | `npm start` | `npm start` |
 
-At any time, `npm run doctor` re-checks everything and tells you how to fix what's wrong.
+Change settings later on the clips page's **Settings** tab (protected by the PIN you choose during setup; `npm run pin` changes it). At any time, `npm run doctor` re-checks everything and tells you how to fix what's wrong.
 Each step is safe to run again.
 
 ---

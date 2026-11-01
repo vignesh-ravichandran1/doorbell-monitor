@@ -54,7 +54,13 @@ async function main() {
   }
   fs.mkdirSync(config.recordingsDir, { recursive: true })
   housekeeping()
-  startServer(config.recordingsDir, config.webPort, { maxStorageGb: config.maxStorageGb, keepDays: config.keepDays }, log)
+  startServer(config.recordingsDir, config.webPort, {
+    config,
+    onSettingsChanged: (keys) => {
+      log(`settings changed from the web page: ${keys.join(', ')}`)
+      housekeeping() // a smaller storage limit takes effect right away
+    },
+  }, log)
 
   const ffmpeg = await findFfmpeg()
   const ring = new RingApi({ refreshToken: token, ffmpegPath: ffmpeg })

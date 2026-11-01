@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Doorbell">
-<title>Doorbell Clips</title>
+<title>Doorbell</title>
 <style>
 :root {
   --bg: #f6f6f4; --surface: #ffffff; --fg: #1b1b1a; --muted: #6b6b66; --line: #e3e2de;
@@ -65,16 +65,57 @@ dialog video { width: 100%; max-height: 75vh; display: block; background: #000; 
 .bar .title { flex: 1; min-width: 160px; font-size: 14px; }
 .bar button, .bar a { background: #2a2a2a; color: #fff; border: 0; border-radius: 8px; padding: 8px 12px; font: inherit; font-size: 14px; cursor: pointer; text-decoration: none; }
 .bar button:disabled { opacity: .35; cursor: default; }
+
+.top { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.top h1 { margin: 0; flex: 1; }
+.tabs { display: flex; gap: 4px; background: var(--line); border-radius: 999px; padding: 3px; }
+.tabs button { border: 0; background: none; color: var(--fg); font: inherit; font-size: 14px; padding: 5px 14px; border-radius: 999px; cursor: pointer; }
+.tabs button[aria-selected="true"] { background: var(--surface); box-shadow: var(--shadow); font-weight: 600; }
+[hidden] { display: none !important; }
+
+.panel { max-width: 640px; padding: 8px 0 60px; }
+.card-box { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 16px; box-shadow: var(--shadow); }
+.card-box h3 { margin: 0 0 4px; font-size: 16px; }
+.card-box > p { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
+.field { display: grid; gap: 4px; padding: 10px 0; border-top: 1px solid var(--line); }
+.field:first-of-type { border-top: 0; }
+.field label, .field .label { font-weight: 600; font-size: 14px; }
+.field .help { color: var(--muted); font-size: 13px; }
+.field input[type=text], .field input[type=number], .field input[type=password] { width: 100%; max-width: 320px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); border-radius: 8px; padding: 8px 10px; font: inherit; }
+.field input[type=number] { max-width: 140px; }
+.checks { display: flex; gap: 16px; }
+.checks label { font-weight: 400; display: flex; gap: 6px; align-items: center; }
+.field .error { color: #dc2626; font-size: 13px; }
+@media (prefers-color-scheme: dark) { .field .error { color: #f87171; } }
+.field.bad input { border-color: #dc2626; }
+.actions { display: flex; gap: 10px; align-items: center; position: sticky; bottom: 0; background: var(--bg); padding: 12px 0; border-top: 1px solid var(--line); }
+.btn { border: 0; background: var(--accent); color: var(--accent-fg); font: inherit; font-weight: 600; border-radius: 8px; padding: 9px 18px; cursor: pointer; }
+.btn.secondary { background: var(--surface); color: var(--fg); border: 1px solid var(--line); font-weight: 400; }
+.btn:disabled { opacity: .5; cursor: default; }
+.notice { border-radius: 10px; padding: 10px 12px; font-size: 14px; margin-bottom: 16px; }
+.notice.ok { background: color-mix(in srgb, #16a34a 14%, var(--surface)); }
+.notice.warn { background: color-mix(in srgb, #d97706 18%, var(--surface)); }
+.notice.err { background: color-mix(in srgb, #dc2626 14%, var(--surface)); }
+.tag { font-size: 11px; font-weight: 600; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 1px 7px; margin-left: 6px; vertical-align: 1px; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
-    <h1>Doorbell clips</h1>
+    <div class="top">
+      <h1>Doorbell</h1>
+      <div class="tabs" role="tablist">
+        <button role="tab" id="tab-clips" aria-selected="true">Clips</button>
+        <button role="tab" id="tab-settings" aria-selected="false">Settings</button>
+      </div>
+    </div>
+    <div id="clips-head">
     <div class="meter" id="meter" role="progressbar" aria-label="Storage used"><i></i></div>
     <div class="stats" id="stats">Loading…</div>
+    </div>
   </header>
 
+  <div id="clips-view">
   <div class="filters">
     <div class="row" id="dates">
       <button class="chip" data-range="all">All</button>
@@ -92,6 +133,107 @@ dialog video { width: 100%; max-height: 75vh; display: block; background: #000; 
   </div>
 
   <main id="list"></main>
+  </div>
+
+  <section id="settings-view" class="panel" hidden>
+    <form id="login" class="card-box" hidden>
+      <h3>Enter PIN</h3>
+      <p id="login-msg">Settings are protected by the PIN you set with <code>npm run setup</code>.</p>
+      <div class="field"><input type="password" id="pin" inputmode="numeric" autocomplete="current-password" placeholder="PIN" aria-label="PIN"></div>
+      <div class="field error" id="login-err" hidden></div>
+      <button class="btn" type="submit">Unlock</button>
+    </form>
+
+    <form id="settings" novalidate hidden>
+      <div id="save-msg"></div>
+
+      <div class="card-box">
+        <h3>Storage</h3>
+        <p>Applied immediately.</p>
+        <div class="field" data-key="MAX_STORAGE_GB">
+          <label for="MAX_STORAGE_GB">Space for clips (GB)</label>
+          <input type="number" id="MAX_STORAGE_GB" min="0" step="0.5">
+          <span class="help">Clips are kept until this is full; then the oldest are deleted. 0 = no limit.</span>
+        </div>
+        <div class="field" data-key="MIN_FREE_GB">
+          <label for="MIN_FREE_GB">Always leave free on the disk (GB)</label>
+          <input type="number" id="MIN_FREE_GB" min="0" step="0.5">
+          <span class="help">A safety net so the disk never fills up completely.</span>
+        </div>
+        <div class="field" data-key="KEEP_DAYS">
+          <label for="KEEP_DAYS">Also delete clips older than (days)</label>
+          <input type="number" id="KEEP_DAYS" min="0" step="1">
+          <span class="help">0 = off: keep clips for as long as there is space.</span>
+        </div>
+      </div>
+
+      <div class="card-box">
+        <h3>Recording</h3>
+        <p>Applied from the next clip.</p>
+        <div class="field" data-key="RECORD_ON">
+          <span class="label">Record clips for</span>
+          <div class="checks"><label><input type="checkbox" name="RECORD_ON" value="ding"> Rings</label><label><input type="checkbox" name="RECORD_ON" value="motion"> Motion</label></div>
+          <span class="help">On a battery doorbell, recording motion drains the battery faster.</span>
+        </div>
+        <div class="field" data-key="RECORD_SECONDS_DING">
+          <label for="RECORD_SECONDS_DING">Ring clip length (seconds)</label>
+          <input type="number" id="RECORD_SECONDS_DING" min="5" max="600" step="5">
+        </div>
+        <div class="field" data-key="RECORD_SECONDS_MOTION">
+          <label for="RECORD_SECONDS_MOTION">Motion clip length (seconds)</label>
+          <input type="number" id="RECORD_SECONDS_MOTION" min="5" max="600" step="5">
+        </div>
+        <div class="field" data-key="MAX_CLIP_SECONDS">
+          <label for="MAX_CLIP_SECONDS">Longest clip (seconds)</label>
+          <input type="number" id="MAX_CLIP_SECONDS" min="10" max="1800" step="10">
+          <span class="help">More rings or motion during a clip keep it recording, up to this length.</span>
+        </div>
+      </div>
+
+      <div class="card-box">
+        <h3>Phone alerts <span class="tag">optional</span></h3>
+        <p>Through the free ntfy app. Off when nothing is ticked: the Ring app already alerts you.</p>
+        <div class="field" data-key="NOTIFY_ON">
+          <span class="label">Send an alert for</span>
+          <div class="checks"><label><input type="checkbox" name="NOTIFY_ON" value="ding"> Rings</label><label><input type="checkbox" name="NOTIFY_ON" value="motion"> Motion</label></div>
+        </div>
+        <div class="field" data-key="NTFY_TOPIC">
+          <label for="NTFY_TOPIC">ntfy topic</label>
+          <input type="text" id="NTFY_TOPIC" autocomplete="off" spellcheck="false">
+          <span class="help">Acts as a password for your alerts: make it long and random, and subscribe to it in the ntfy app.</span>
+        </div>
+        <div class="field" data-key="MOTION_COOLDOWN_SECONDS">
+          <label for="MOTION_COOLDOWN_SECONDS">At most one motion alert every (seconds)</label>
+          <input type="number" id="MOTION_COOLDOWN_SECONDS" min="0" step="10">
+        </div>
+        <div class="field" data-key="WEB_BASE_URL">
+          <label for="WEB_BASE_URL">Address of this page, for alert links</label>
+          <input type="text" id="WEB_BASE_URL" placeholder="http://100.x.y.z:8080" spellcheck="false">
+          <span class="help">Use the Tailscale address so tapping an alert opens the clip anywhere.</span>
+        </div>
+      </div>
+
+      <div class="card-box">
+        <h3>Advanced <span class="tag">needs restart</span></h3>
+        <p>Saved now, used after the app restarts.</p>
+        <div class="field" data-key="RECORDINGS_PATH">
+          <label for="RECORDINGS_PATH">Clips folder</label>
+          <input type="text" id="RECORDINGS_PATH" spellcheck="false">
+          <span class="help">E.g. an external disk: E:/doorbell (Windows) or /Volumes/MyDisk/doorbell (Mac). Existing clips aren't moved.</span>
+        </div>
+        <div class="field" data-key="WEB_PORT">
+          <label for="WEB_PORT">Page port</label>
+          <input type="number" id="WEB_PORT" min="1024" max="65535">
+          <span class="help">The number at the end of this page's address, e.g. :8080.</span>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="btn" type="submit" id="save">Save</button>
+        <button class="btn secondary" type="button" id="logout">Lock</button>
+      </div>
+    </form>
+  </section>
 </div>
 
 <dialog id="viewer">
@@ -129,7 +271,7 @@ function dayTitle(day) {
 
 // Filters live in the URL (#range=week&type=ding) so reload and Back keep them.
 function readHash() {
-  const p = new URLSearchParams(location.hash.slice(1))
+  const p = new URLSearchParams(location.hash === '#settings' ? '' : location.hash.slice(1))
   state.range = p.get('range') || (p.get('day') ? 'day' : 'all')
   state.day = p.get('day') || ''
   state.type = p.get('type') || 'all'
@@ -260,10 +402,121 @@ async function load() {
   }
 }
 
+// ---- Tabs ----
+function showView(view) {
+  const settings = view === 'settings'
+  $('clips-view').hidden = settings
+  $('clips-head').hidden = settings
+  $('settings-view').hidden = !settings
+  $('tab-clips').setAttribute('aria-selected', !settings)
+  $('tab-settings').setAttribute('aria-selected', settings)
+  if (settings) { history.replaceState(null, '', '#settings'); loadSettings() } else writeHash()
+}
+$('tab-clips').addEventListener('click', () => showView('clips'))
+$('tab-settings').addEventListener('click', () => showView('settings'))
+
+// ---- Settings ----
+const NAMES = {
+  RECORDINGS_PATH: 'Clips folder', WEB_PORT: 'Page port',
+}
+let settingsFields = []
+
+async function api(method, url, body) {
+  const res = await fetch(url, { method, headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined })
+  return { status: res.status, data: await res.json().catch(() => ({})) }
+}
+
+function showLogin(pinSet, error) {
+  $('settings').hidden = true
+  $('login').hidden = false
+  $('login-msg').innerHTML = pinSet
+    ? 'Settings are protected by a PIN.'
+    : 'No PIN is set yet. On the recording computer, run <code>npm run pin</code>, then come back here.'
+  $('pin').disabled = !pinSet
+  $('login-err').hidden = !error
+  $('login-err').textContent = error || ''
+  if (pinSet) $('pin').focus()
+}
+
+function fillSettings({ settings, fields, restart }) {
+  settingsFields = fields || settingsFields
+  for (const f of settingsFields) {
+    const v = settings[f.key]
+    if (f.type === 'events') {
+      for (const box of document.querySelectorAll(`input[name="${f.key}"]`)) box.checked = v.includes(box.value)
+    } else if ($(f.key)) $(f.key).value = v ?? ''
+  }
+  for (const el of document.querySelectorAll('.field.bad')) el.classList.remove('bad')
+  for (const el of document.querySelectorAll('.field .error')) el.remove()
+  showRestart(restart)
+}
+
+function showRestart(restart, saved) {
+  const msg = $('save-msg')
+  const parts = []
+  if (saved) parts.push(`<div class="notice ok">${saved.length ? 'Saved and applied.' : 'Nothing changed.'}</div>`)
+  if (restart?.length) parts.push(`<div class="notice warn">Restart the recorder to use the new ${restart.map((k) => NAMES[k] || k).join(' and ')}. (Stop it with Ctrl+C and start it again, or restart the computer if it starts automatically.)</div>`)
+  msg.innerHTML = parts.join('')
+}
+
+async function loadSettings() {
+  const { status, data } = await api('GET', '/api/settings')
+  if (status === 401) return showLogin(data.pinSet)
+  $('login').hidden = true
+  $('settings').hidden = false
+  fillSettings(data)
+}
+
+$('login').addEventListener('submit', async (e) => {
+  e.preventDefault()
+  const { status, data } = await api('POST', '/api/login', { pin: $('pin').value })
+  $('pin').value = ''
+  if (status !== 200) return showLogin(true, data.error)
+  loadSettings()
+})
+
+$('logout').addEventListener('click', async () => {
+  await api('POST', '/api/logout')
+  showLogin(true)
+})
+
+$('settings').addEventListener('submit', async (e) => {
+  e.preventDefault()
+  const body = {}
+  for (const f of settingsFields) {
+    if (f.type === 'events') body[f.key] = [...document.querySelectorAll(`input[name="${f.key}"]:checked`)].map((b) => b.value)
+    else if ($(f.key)) body[f.key] = $(f.key).value.trim()
+  }
+  $('save').disabled = true
+  const { status, data } = await api('PUT', '/api/settings', body)
+  $('save').disabled = false
+  if (status === 401) return showLogin(true, 'Your session expired. Enter the PIN again.')
+  if (status === 400 && data.errors) {
+    for (const el of document.querySelectorAll('.field.bad')) el.classList.remove('bad')
+    for (const el of document.querySelectorAll('.field .error')) el.remove()
+    for (const [key, message] of Object.entries(data.errors)) {
+      const field = document.querySelector(`.field[data-key="${key}"]`)
+      if (!field) continue
+      field.classList.add('bad')
+      field.insertAdjacentHTML('beforeend', `<span class="error"></span>`)
+      field.lastElementChild.textContent = message
+    }
+    $('save-msg').innerHTML = '<div class="notice err">Nothing was saved. Fix the highlighted fields.</div>'
+    document.querySelector('.field.bad')?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    return
+  }
+  if (status !== 200) { $('save-msg').innerHTML = `<div class="notice err">Couldn't save: ${data.error || status}</div>`; return }
+  fillSettings(data)
+  showRestart(data.restart, data.saved)
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+  load() // storage limit may have changed the meter
+})
+
 readHash()
 renderFilters()
 load()
 setInterval(load, 30000)
+showView(location.hash === '#settings' ? 'settings' : 'clips')
 </script>
 </body>
 </html>

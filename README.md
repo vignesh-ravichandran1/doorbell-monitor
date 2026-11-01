@@ -28,8 +28,10 @@ Check everything at any time with `npm run doctor`.
 
 Your Ring email and password go only to Ring. Only a login token is kept, in `.ring-token` on that computer. It and your `.env` settings are never uploaded. Each computer (Mac for testing, laptop for 24/7) gets its own login and settings.
 
-## Settings (`.env`)
-| Setting | Default | Meaning |
+## Settings
+Open the clips page → **Settings** tab, and unlock it with your PIN (set during `npm run setup`, change it any time with `npm run pin`). Storage, recording and alert settings apply immediately; the clips folder and port apply after a restart. Everything is saved in `.env`, which you can also edit by hand.
+
+| Setting (`.env`) | Default | Meaning |
 |---|---|---|
 | `RECORDINGS_PATH` | `recordings` | Where clips go, e.g. `E:/doorbell` for an external disk on Windows |
 | `MAX_STORAGE_GB` | `20` | Space for all clips; the oldest are deleted only when it's full (`0` = no cap) |

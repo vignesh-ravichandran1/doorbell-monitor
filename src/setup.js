@@ -7,8 +7,10 @@ import os from 'node:os'
 import path from 'node:path'
 import readline from 'node:readline'
 import { APP_DIR, config, envFile, loadToken, saveToken, updateEnvText } from './config.js'
+import { hashPin, validPin } from './settings.js'
 
 const loginOnly = process.argv.includes('--login-only')
+const pinOnly = process.argv.includes('--pin-only')
 
 // One readline for the whole session. While `secretPrompt` is set, typed characters are
 // hidden but the prompt itself is still drawn (readline redraws it when the line changes).
@@ -182,8 +184,34 @@ function lanAddress() {
   return 'localhost'
 }
 
+async function settingsPin({ force = false } = {}) {
+  console.log('\n== Settings page PIN')
+  console.log('The clips page has a Settings tab; this PIN protects it (anyone on your Wi-Fi can open the page).')
+  if (process.env.SETTINGS_PIN_HASH && !force && !(await yes('A PIN is already set. Change it?', false))) return
+  for (;;) {
+    const pin = await askSecret('New PIN, 4-12 digits (hidden)')
+    if (!validPin(pin)) {
+      console.log('Use 4 to 12 digits.')
+      continue
+    }
+    if ((await askSecret('Type it again (hidden)')) !== pin) {
+      console.log("They didn't match, try again.")
+      continue
+    }
+    const hash = hashPin(pin)
+    fs.writeFileSync(envFile, updateEnvText(fs.readFileSync(envFile, 'utf8'), { SETTINGS_PIN_HASH: hash }))
+    process.env.SETTINGS_PIN_HASH = hash
+    console.log('PIN saved. It works right away, no restart needed.')
+    return
+  }
+}
+
 async function main() {
   if (!fs.existsSync(envFile)) fs.copyFileSync(path.join(APP_DIR, '.env.example'), envFile)
+  if (pinOnly) {
+    await settingsPin({ force: true })
+    return rl.close()
+  }
 
   if (!loadToken() || (await yes('Already logged in to Ring on this computer. Log in again?', false))) {
     await ringLogin()
@@ -191,6 +219,7 @@ async function main() {
   if (loginOnly) return rl.close()
 
   await settings()
+  await settingsPin()
 
   // Run the checks as a fresh process so they read the new .env, and before auto-start
   // so only one program uses the Ring login at a time.
