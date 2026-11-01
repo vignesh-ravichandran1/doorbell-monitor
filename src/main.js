@@ -5,6 +5,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { promisify } from 'node:util'
 import { RingApi } from 'ring-client-api'
+import { enableDebug, useLogger } from 'ring-client-api/util'
 import { filter, firstValueFrom } from 'rxjs'
 import { config, findFfmpeg, loadToken, saveToken } from './config.js'
 import { startServer } from './server.js'
@@ -12,6 +13,13 @@ import { clipPath, prune, writeIndex } from './storage.js'
 
 const log = (...args) => console.log(new Date().toLocaleString(), ...args)
 const run = promisify(execFile)
+
+// ring-client-api is silent by default; show its messages (e.g. push connection errors) in our log.
+useLogger({
+  logInfo: (...m) => log('[ring]', ...m),
+  logError: (m) => log('[ring] ERROR', m instanceof Error ? m.message : m),
+})
+if (process.argv.includes('--debug')) enableDebug()
 
 async function notify(title, message, { priority = 'default', image, click } = {}) {
   if (!config.ntfyTopic) return
@@ -114,10 +122,14 @@ async function main() {
 
   for (const camera of cameras) {
     log(`watching ${camera.name}`)
+    // Every ding/motion notification Ring sends, before any filtering, to make problems visible.
+    camera.onNewNotification.subscribe((n) =>
+      log(`notification from Ring for ${camera.name}: ${n.android_config?.category ?? 'unknown'}`))
     camera.onDoorbellPressed.subscribe(() => handle(camera, 'ding'))
     camera.onMotionDetected.pipe(filter(Boolean)).subscribe(() => handle(camera, 'motion'))
   }
   setInterval(housekeeping, 3600_000)
+  log('waiting for rings and motion (ring the doorbell to test)...')
 }
 
 main().catch((e) => {

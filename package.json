@@ -12,6 +12,7 @@
     "login": "node src/setup.js --login-only",
     "doctor": "node src/doctor.js",
     "start": "node src/main.js",
+    "debug": "node src/main.js --debug",
     "test": "node --test"
   },
   "dependencies": {

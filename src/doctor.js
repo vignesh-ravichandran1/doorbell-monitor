@@ -91,6 +91,19 @@ async function internetCheck() {
   }
 }
 
+function pushCheck() {
+  // Ring delivers ding/motion events through Google's push service on TCP port 5228.
+  return new Promise((resolve) => {
+    const sock = net.connect({ host: 'mtalk.google.com', port: 5228, timeout: 10000 })
+    const done = (r) => { sock.destroy(); resolve(r) }
+    sock.once('connect', () => done({ ok: true, msg: 'can reach Ring event push service' }))
+    const fail = () => done({ ok: false, msg: "can't reach mtalk.google.com:5228 (Ring's event push)",
+      fix: 'Without it no ring/motion events arrive. Allow TCP port 5228 in your firewall, VPN or ad blocker (e.g. Little Snitch, Pi-hole, NextDNS).' })
+    sock.once('timeout', fail)
+    sock.once('error', fail)
+  })
+}
+
 function envCheck() {
   return fs.existsSync(envFile)
     ? { ok: true, msg: '.env settings file found' }
@@ -123,6 +136,7 @@ export async function runChecks({ pre = false } = {}) {
     ['Node.js', nodeCheck],
     ['ffmpeg', ffmpegCheck],
     ['Internet', internetCheck],
+    ['Ring events', pushCheck],
     ['Storage', storageCheck],
     ['Web port', portCheck],
     ...(pre ? [] : [['Settings', envCheck], ['Ring', ringCheck]]),
