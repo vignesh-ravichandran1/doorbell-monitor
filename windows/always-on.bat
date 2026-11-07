@@ -14,7 +14,8 @@ powercfg /setacvalueindex SCHEME_CURRENT 2a737441-1930-4402-8d77-b2bebba308a3 48
 powercfg /setactive SCHEME_CURRENT
 
 echo == Network adapters: don't let Windows turn them off to save power
-powershell -NoProfile -Command "Get-NetAdapter -Physical | ForEach-Object { Set-NetAdapterPowerManagement -Name $_.Name -AllowComputerToTurnOffDevice Disabled -ErrorAction SilentlyContinue }"
+rem (Set-NetAdapterPowerManagement has no such option on Windows 10; this is the Device Manager checkbox)
+powershell -NoProfile -Command "Get-NetAdapter -Physical | ForEach-Object { $id = $_.PnPDeviceID; Get-CimInstance -Namespace root/wmi -ClassName MSPower_DeviceEnable | Where-Object { $_.InstanceName -like ($id + '*') } | Set-CimInstance -Property @{Enable=$false} }"
 
 echo == Home network set to Private (needed for phones to reach the clips page)
 powershell -NoProfile -Command "Get-NetConnectionProfile | Where-Object NetworkCategory -eq 'Public' | Set-NetConnectionProfile -NetworkCategory Private"
