@@ -15,6 +15,7 @@
     "doctor": "node src/doctor.js",
     "start": "node src/main.js",
     "debug": "node src/main.js --debug",
+    "test-clip": "node src/record-check.js --debug",
     "test": "node --test"
   },
   "dependencies": {

@@ -74,6 +74,12 @@ function storageCheck() {
   return { ok: true, msg }
 }
 
+const portBusy = (port) => new Promise((resolve) => {
+  const srv = net.createServer()
+  srv.once('error', () => resolve(true))
+  srv.listen(port, () => srv.close(() => resolve(false)))
+})
+
 function portCheck() {
   return new Promise((resolve) => {
     const srv = net.createServer()
@@ -113,6 +119,11 @@ function envCheck() {
 async function ringCheck() {
   const token = loadToken()
   if (!token) return { ok: false, msg: 'not logged in to Ring', fix: 'Run: npm run setup' }
+  // A second connection with the same login can knock the running recorder off Ring's
+  // event service, so don't test the login while the recorder is up.
+  if (await portBusy(config.webPort)) {
+    return { ok: true, warn: true, msg: 'Ring login check skipped: the recorder is running', fix: 'To test it, stop the recorder first (Ctrl+C, then Y) and run this again.' }
+  }
   const { RingApi } = await import('ring-client-api')
   const ring = new RingApi({ refreshToken: token })
   ring.onRefreshTokenUpdated.subscribe(({ newRefreshToken }) => saveToken(newRefreshToken))
