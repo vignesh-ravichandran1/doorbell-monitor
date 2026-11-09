@@ -6,6 +6,7 @@ import path from 'node:path'
 import { promisify } from 'node:util'
 import { firstValueFrom } from 'rxjs'
 import { clipPath } from './storage.js'
+import { makeThumbnail } from './thumbnail.js'
 
 const run = promisify(execFile)
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -15,14 +16,13 @@ export async function waitForFinishedMp4(file, timeoutMs = 30_000) {
   let lastSize = -1
   for (const end = Date.now() + timeoutMs; Date.now() < end;) {
     await sleep(1000)
-    if (!fs.existsSync(file)) continue
-    const { size } = fs.statSync(file)
+    const size = (await fs.promises.stat(file).catch(() => null))?.size
+    if (size === undefined) continue
     if (size === lastSize && size > 0) {
-      const fd = fs.openSync(file, 'r')
-      const head = Buffer.alloc(Math.min(size, 4 * 1024 * 1024))
-      fs.readSync(fd, head, 0, head.length, 0)
-      fs.closeSync(fd)
-      if (head.includes('moov')) return
+      const fd = await fs.promises.open(file, 'r')
+      const { buffer } = await fd.read(Buffer.alloc(Math.min(size, 4 * 1024 * 1024)), 0, Math.min(size, 4 * 1024 * 1024), 0)
+        .finally(() => fd.close())
+      if (buffer.includes('moov')) return
     }
     lastSize = size
   }
@@ -58,9 +58,20 @@ export async function record(camera, session, { ffmpeg, recordingsDir, maxClipSe
     fs.renameSync(clip, finalClip)
     clip = finalClip
   }
+  // Rewrite it as a regular MP4 with its index at the front (stream copy, no re-encoding: a
+  // second or two). Players then know its length and can jump anywhere at once instead of
+  // reading through fragments, which matters most on a phone over Tailscale. If this fails,
+  // the fragmented clip is kept: it still plays, it just seeks more slowly.
+  const tmp = `${clip}.tmp`
+  await run(ffmpeg, ['-hide_banner', '-loglevel', 'error', '-y', '-i', clip, '-map', '0', '-c', 'copy',
+    '-movflags', '+faststart', '-f', 'mp4', tmp])
+    .then(() => fs.promises.rename(tmp, clip))
+    .catch((e) => {
+      fs.rmSync(tmp, { force: true })
+      log(`could not make ${path.basename(clip)} quick to seek, kept as recorded: ${e.message.split('\n')[0]}`)
+    })
   const thumb = clip.replace(/\.mp4$/, '.jpg')
-  await run(ffmpeg, ['-hide_banner', '-loglevel', 'error', '-y', '-ss', '2', '-i', clip,
-    '-frames:v', '1', '-vf', 'scale=640:-2', thumb]).catch(() => {})
+  await makeThumbnail(ffmpeg, clip, thumb, { ringAt: session.ringAt, run }).catch(() => {})
   log(`saved ${path.relative(recordingsDir, clip)} (${Math.round((Date.now() - session.startedAt) / 1000)}s)`)
   return { clip, thumb, started }
 }

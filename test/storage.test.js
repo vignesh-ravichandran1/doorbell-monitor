@@ -63,23 +63,23 @@ test('age limit is off by default (keepDays 0): old clips stay while there is sp
   assert.ok(fs.existsSync(old))
 })
 
-test('clipSummary lists newest first with thumbnails and total size', () => {
+test('clipSummary lists newest first with thumbnails and total size', async () => {
   const root = tmp()
   makeClip(root, '2026-01-30', '080000_ding_a.mp4', 10)
   makeClip(root, '2026-01-31', '093015_motion_a.mp4', 20)
-  const { clips, usedBytes } = clipSummary(root)
+  const { clips, usedBytes } = await clipSummary(root)
   assert.deepEqual(clips.map((c) => [c.day, c.time, c.event]), [['2026-01-31', '09:30:15', 'motion'], ['2026-01-30', '08:00:00', 'ding']])
-  assert.equal(clips[0].thumb, '/2026-01-31/093015_motion_a.jpg')
+  assert.match(clips[0].thumb, /^\/2026-01-31\/093015_motion_a\.jpg\?v=[0-9a-z]+$/)
   assert.equal(usedBytes, 10 + 1 + 20 + 1)
 })
 
-test('clipSummary orders rings and motion together, newest first', () => {
+test('clipSummary orders rings and motion together, newest first', async () => {
   const root = tmp()
   for (const name of ['090000_ding_a.mp4', '100000_motion_a.mp4', '110000_ding_a.mp4', '113000_motion_a.mp4']) {
     makeClip(root, '2026-01-31', name)
   }
   makeClip(root, '2026-02-01', '070000_motion_a.mp4')
-  const order = clipSummary(root).clips.map((c) => `${c.day} ${c.time} ${c.event}`)
+  const order = (await clipSummary(root)).clips.map((c) => `${c.day} ${c.time} ${c.event}`)
   assert.deepEqual(order, [
     '2026-02-01 07:00:00 motion',
     '2026-01-31 11:30:00 motion',

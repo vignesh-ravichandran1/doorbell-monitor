@@ -8,6 +8,8 @@ export class ClipSession {
     this.event = event
     this.wanted = this.lengthFor(event) // seconds, measured from the moment video starts
     this.startedAt = null
+    // Seconds into the video of the first ring (0 if a ring started the clip), for the thumbnail.
+    this.ringAt = event === 'ding' ? 0 : null
   }
 
   lengthFor(event) {
@@ -21,8 +23,11 @@ export class ClipSession {
 
   /** Another ring/motion arrived while this clip is recording (or still connecting). */
   extend(event, now = Date.now()) {
-    if (event === 'ding') this.event = 'ding' // a clip with a ring in it is a ring clip
     const elapsed = this.startedAt === null ? 0 : (now - this.startedAt) / 1000
+    if (event === 'ding') {
+      this.event = 'ding' // a clip with a ring in it is a ring clip
+      if (this.ringAt === null) this.ringAt = elapsed
+    }
     this.wanted = Math.min(this.maxSeconds, Math.max(this.wanted, elapsed + this.lengthFor(event)))
   }
 

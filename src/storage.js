@@ -72,22 +72,36 @@ export function prune(root, { keepDays, maxStorageGb, minFreeGb, now = new Date(
 }
 
 /** Every clip, newest first, plus total size: the data behind the clips page. */
-export function clipSummary(root) {
+// Async (it's called per page load and stats every file): a synchronous version would stall the
+// whole recorder whenever the disk is busy.
+export async function clipSummary(root) {
+  const sizes = new Map()
+  const days = (await fs.promises.readdir(root, { withFileTypes: true }).catch(() => []))
+    .filter((e) => e.isDirectory() && DAY_RE.test(e.name)).map((e) => e.name)
+  const names = await Promise.all(days.map(async (day) => {
+    const files = await fs.promises.readdir(path.join(root, day)).catch(() => [])
+    await Promise.all(files.map(async (f) => {
+      const st = await fs.promises.stat(path.join(root, day, f)).catch(() => null)
+      if (st) sizes.set(path.join(root, day, f), st)
+    }))
+    return files.filter((f) => f.endsWith('.mp4')).map((f) => path.join(root, day, f))
+  }))
   let usedBytes = 0
-  const clips = listClips(root).reverse().map((clip) => {
+  const clips = names.flat().map((clip) => {
     const day = path.basename(path.dirname(clip))
     const name = path.basename(clip)
     const [hms, event] = name.split('_')
     const thumb = thumbOf(clip)
-    const hasThumb = fs.existsSync(thumb)
-    const size = sizeOf(clip) + sizeOf(thumb)
+    const hasThumb = sizes.has(thumb)
+    const size = (sizes.get(clip)?.size || 0) + (sizes.get(thumb)?.size || 0)
     usedBytes += size
     return {
       day,
       time: `${hms.slice(0, 2)}:${hms.slice(2, 4)}:${hms.slice(4, 6)}`,
       event,
       url: `/${day}/${encodeURIComponent(name)}`,
-      thumb: hasThumb ? `/${day}/${encodeURIComponent(path.basename(thumb))}` : null,
+      // ?v= changes when the thumbnail is re-made, since browsers keep thumbnails for a week.
+      thumb: hasThumb ? `/${day}/${encodeURIComponent(path.basename(thumb))}?v=${Math.floor(sizes.get(thumb).mtimeMs).toString(36)}` : null,
       size,
     }
   })

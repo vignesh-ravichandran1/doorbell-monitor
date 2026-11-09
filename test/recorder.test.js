@@ -42,5 +42,7 @@ test('a ring during a motion clip extends it and makes it a ring clip', { timeou
   assert.ok(fs.existsSync(thumb), 'thumbnail made')
   const secs = duration(clip)
   assert.ok(secs > 6.5 && secs < 8.5, `clip is ${secs}s, expected ~7.5s`)
-  assert.equal(fs.readdirSync(path.dirname(clip)).filter((f) => f.endsWith('.mp4')).length, 1, 'renamed, not copied')
+  assert.deepEqual(fs.readdirSync(path.dirname(clip)).filter((f) => !f.endsWith('.jpg')), [path.basename(clip)], 'renamed, not copied; no temp file left')
+  const head = fs.readFileSync(clip).subarray(0, 64 * 1024)
+  assert.ok(head.includes('moov') && !fs.readFileSync(clip).includes('moof'), 'regular MP4 with its index at the front')
 })

@@ -49,3 +49,13 @@ test('events while still connecting extend from the start of video', () => {
   s.start(T0)
   assert.equal(s.deadline, T0 + 60_000)
 })
+
+test('remembers when the first ring happened, for the thumbnail', () => {
+  assert.equal(new ClipSession('ding', cfg).ringAt, 0)
+  const s = new ClipSession('motion', cfg)
+  s.start(T0)
+  assert.equal(s.ringAt, null)
+  s.extend('ding', T0 + 12_000)
+  s.extend('ding', T0 + 20_000)
+  assert.equal(s.ringAt, 12)
+})

@@ -16,6 +16,7 @@
     "start": "node src/main.js",
     "debug": "node src/main.js --debug",
     "test-clip": "node src/record-check.js --debug",
+    "rethumb": "node src/rethumb.js",
     "test": "node --test"
   },
   "dependencies": {
