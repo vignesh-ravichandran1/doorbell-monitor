@@ -1,6 +1,7 @@
 // Listens for Ring ding/motion events, records a clip of each from the live view,
 // purges old clips, and serves a page to watch them. No Ring subscription needed.
 import fs from 'node:fs'
+import net from 'node:net'
 import path from 'node:path'
 import { RingApi } from 'ring-client-api'
 import { enableDebug, useLogger } from 'ring-client-api/util'
@@ -15,6 +16,11 @@ import { prune } from './storage.js'
 
 const log = (...args) => console.log(new Date().toLocaleString(), ...args)
 const debug = process.argv.includes('--debug') || process.env.DEBUG_LOG === '1'
+const portInUse = (port) => new Promise((resolve) => {
+  const srv = net.createServer()
+  srv.once('error', () => resolve(true))
+  srv.listen(port, () => srv.close(() => resolve(false)))
+})
 const logsDir = startFileLog(path.join(APP_DIR, 'logs'))
 
 // ring-client-api is silent by default; show its messages (e.g. push connection errors) in our log.
@@ -24,6 +30,12 @@ useLogger({
 })
 if (debug) enableDebug()
 const pushStatus = watchPush(log, { verbose: debug })
+// One recorder per computer: a second one would share the same Ring push connection and the two
+// would knock each other off it. Exit code 3 = don't restart (see windows/start-doorbell.bat).
+if (await portInUse(config.webPort)) {
+  log(`another recorder is already running (port ${config.webPort} in use); this one exits`)
+  process.exit(3)
+}
 trackLifecycle(logsDir, log, { status: pushStatus })
 if (debug) log('debug logging on')
 

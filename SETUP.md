@@ -66,12 +66,14 @@ Windows 7/8 or 32-bit Windows can't run it. `prepare.bat` will tell you so. In t
    - **Folder for clips:** your external hard disk, e.g. `E:/doorbell`. Check its drive letter in File Explorer → This PC.
    - **Settings page PIN:** choose 4–12 digits.
    - **Space for clips:** a GB amount that fits your disk, leaving some room. The oldest clips are deleted only when it's full.
-   - **"Is this the one that will record 24/7?"** Answer **y**. This sets the laptop to never sleep on mains power and keep running with the lid closed, and it starts the recorder automatically every time you sign in.
-5. **Start it now:** double-click `windows\start-doorbell.bat`, or restart the laptop. A minimised window named *Doorbell recorder* means it's running. If it ever stops, it restarts within 10 seconds.
+   - **"Is this the one that will record 24/7?"** Answer **y**. This sets the laptop to never sleep on mains power and keep running with the lid closed, and makes the recorder start at **every boot, without anyone signing in**. Click **Yes** when Windows asks for permission.
+5. **It's running now, in the background (no window).** It starts again at every boot, including Windows Update restarts and power cuts, and restarts within 10 seconds if it ever stops.
+   - **Watch it:** double-click `windows\watch-log.bat`. Closing that window doesn't stop the recorder.
+   - **Stop it:** `windows\stop-recorder.bat`. **Start or restart it:** `windows\start-at-boot.bat` (also sets up start at boot if it isn't already).
+   - **Logs** are in the `logs` folder, one file per day. Each start notes when the laptop booted and how the previous run ended, so any gap in recording is explained.
 6. **Always-on Windows settings:** double-click `windows\always-on.bat` and click **Yes**. It sets the laptop to never sleep on mains power (lid closed included), keeps the USB disk and network adapter powered, marks your home network as Private, and opens the clips page to your home Wi-Fi and Tailscale devices only.
-7. **Windows Update:** Settings → Update & Security → Windows Update → **Change active hours**, and set them to when you're usually home. Updates restart outside those hours, and the recorder starts again after sign-in.
-8. **Survive power cuts (recommended):** press **Win+R**, type `netplwiz`, untick *Users must enter a user name and password*, and click OK. Windows then signs in and starts recording on its own after a reboot.
-9. **Fixed address:** in the Bell Home Hub (`http://192.168.2.1` → **DHCP**), reserve the laptop's IP address. Then the clips page, e.g. `http://192.168.2.50:8080`, never changes. Don't forward any ports.
+7. **Windows Update:** Settings → Update & Security → Windows Update → **Change active hours**, and set them to when you're usually home. Updates restart outside those hours, and the recorder starts again by itself after the restart.
+8. **Fixed address:** in the Bell Home Hub (`http://192.168.2.1` → **DHCP**), reserve the laptop's IP address. Then the clips page, e.g. `http://192.168.2.50:8080`, never changes. Don't forward any ports.
 
 **Problems?** In a Command Prompt in the folder, run `npm run doctor`.
 

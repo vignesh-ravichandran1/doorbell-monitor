@@ -94,6 +94,15 @@ export function trackLifecycle(logsDir, log, { status } = {}) {
     write({ ...state, lastAlive: new Date().toISOString(), stoppedAt: new Date().toISOString(), stopReason: reason })
     process.exit(code)
   }
+  // windows\stop-recorder.bat drops this file; exit code 3 tells start-doorbell.bat not to restart.
+  const stopFile = path.join(logsDir, 'stop-request')
+  fs.rmSync(stopFile, { force: true })
+  setInterval(() => {
+    if (!fs.existsSync(stopFile)) return
+    fs.rmSync(stopFile, { force: true })
+    stop('asked to stop (stop-recorder.bat)', 3)
+  }, 2000).unref()
+
   process.on('SIGINT', () => stop('Ctrl+C'))
   process.on('SIGTERM', () => stop('asked to stop (SIGTERM)'))
   process.on('SIGBREAK', () => stop('Ctrl+Break'))

@@ -134,11 +134,14 @@ function autostartWindows() {
     ['/setacvalueindex', 'SCHEME_CURRENT', 'SUB_BUTTONS', 'LIDACTION', '0'],
     ['/setactive', 'SCHEME_CURRENT'],
   ]) execFileSync('powercfg', args, { stdio: 'ignore' })
-  const bat = path.join(APP_DIR, 'windows', 'start-doorbell.bat')
-  ps(`$s=(New-Object -ComObject WScript.Shell).CreateShortcut([Environment]::GetFolderPath('Startup')+'\\Doorbell recorder.lnk'); $s.TargetPath='${bat}'; $s.WorkingDirectory='${APP_DIR}'; $s.WindowStyle=7; $s.Save()`)
-  console.log('On mains power the laptop will no longer sleep, keeps running with the lid closed,')
-  console.log('and the recorder starts (minimised) every time you sign in.')
-  console.log('Tip: to survive power cuts, run "netplwiz" and turn on automatic sign-in.')
+  // Start at boot as SYSTEM (no sign-in needed), so Windows Update restarts and power cuts
+  // don't stop recording. Needs admin, so Windows asks for permission.
+  const task = path.join(APP_DIR, 'windows', 'boot-task.ps1')
+  console.log('Windows will ask for permission to start the recorder at every boot. Click Yes.')
+  ps(`Start-Process powershell -Verb RunAs -Wait -ArgumentList '-NoProfile -ExecutionPolicy Bypass -Command "& ''${task}''; Start-Sleep 5"'`)
+  console.log('On mains power the laptop will no longer sleep and keeps running with the lid closed.')
+  console.log('The recorder now runs in the background from every boot, without anyone signing in.')
+  console.log('Watch it: windows\\watch-log.bat   Stop it: windows\\stop-recorder.bat')
 }
 
 function autostartLinux() {
