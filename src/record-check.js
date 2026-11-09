@@ -9,6 +9,7 @@ import { enableDebug, useLogger } from 'ring-client-api/util'
 import { ClipSession } from './clip-session.js'
 import { config, findFfmpeg, loadToken, saveToken } from './config.js'
 import { record } from './recorder.js'
+import { watchPush } from './push-debug.js'
 
 const log = (...args) => console.log(new Date().toLocaleTimeString(), ...args)
 useLogger({
@@ -16,6 +17,7 @@ useLogger({
   logError: (m) => log('[ring] ERROR', m instanceof Error ? m.message : m),
 })
 if (process.argv.includes('--debug')) enableDebug()
+watchPush(log, { verbose: process.argv.includes('--debug') })
 
 const portInUse = (port) => new Promise((resolve) => {
   const srv = net.createServer()

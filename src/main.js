@@ -7,18 +7,25 @@ import { enableDebug, useLogger } from 'ring-client-api/util'
 import { filter } from 'rxjs'
 import { ClipSession } from './clip-session.js'
 import { record } from './recorder.js'
-import { config, findFfmpeg, loadToken, saveToken } from './config.js'
+import { watchPush } from './push-debug.js'
+import { APP_DIR, config, findFfmpeg, loadToken, saveToken } from './config.js'
+import { startFileLog, trackLifecycle } from './lifecycle.js'
 import { startServer } from './server.js'
 import { prune } from './storage.js'
 
 const log = (...args) => console.log(new Date().toLocaleString(), ...args)
+const debug = process.argv.includes('--debug') || process.env.DEBUG_LOG === '1'
+const logsDir = startFileLog(path.join(APP_DIR, 'logs'))
 
 // ring-client-api is silent by default; show its messages (e.g. push connection errors) in our log.
 useLogger({
   logInfo: (...m) => log('[ring]', ...m),
   logError: (m) => log('[ring] ERROR', m instanceof Error ? m.message : m),
 })
-if (process.argv.includes('--debug')) enableDebug()
+if (debug) enableDebug()
+const pushStatus = watchPush(log, { verbose: debug })
+trackLifecycle(logsDir, log, { status: pushStatus })
+if (debug) log('debug logging on')
 
 async function notify(title, message, { priority = 'default', image, click } = {}) {
   if (!config.ntfyTopic) return
