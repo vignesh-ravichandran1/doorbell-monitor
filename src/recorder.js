@@ -33,8 +33,13 @@ export async function record(camera, session, { ffmpeg, recordingsDir, maxClipSe
   let clip = clipPath(recordingsDir, started, session.event, camera.id)
   fs.mkdirSync(path.dirname(clip), { recursive: true })
   // -t is only a safety net; the session decides when to stop.
+  // Fragmented MP4 (index up front, self-contained fragments): ring-client-api stops ffmpeg
+  // with kill(), which on Windows terminates it at once, so a normal MP4 never gets its index
+  // written and won't play. A fragmented one is playable however ffmpeg ends (crash, power cut).
+  // -flush_packets 1 writes each fragment to disk at once instead of keeping it in a buffer.
   const call = await camera.streamVideo({
-    output: ['-t', String(maxClipSeconds + 10), '-movflags', '+faststart', clip],
+    output: ['-t', String(maxClipSeconds + 10), '-flush_packets', '1',
+      '-movflags', '+frag_keyframe+empty_moov+default_base_moof', clip],
   })
   session.start()
   let ended = false
