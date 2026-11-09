@@ -6,6 +6,8 @@ It's one small Node.js program, with no Docker. It runs on **macOS, Windows 10/1
 - Records each ring (60 s) and motion event (30 s) from Ring's free live view. If activity continues, the same clip keeps recording, up to 2 minutes.
 - Keeps as many clips as fit: the oldest are deleted only when the space you set (default **20 GB**) is full.
 - Clips page for any phone or computer on your home Wi-Fi (`http://<computer-ip>:8080`), or anywhere through Tailscale: newest first, filters by day and by rings vs. motion, a storage meter, and a PIN-protected **Settings** tab.
+- Thumbnails show what happened: the visitor at the moment of the ring, or the most eventful frame of a motion clip.
+- Runs 24/7 on an old Windows laptop: starts at boot **without anyone signing in**, survives Windows Update restarts and power cuts, and logs why any gap in recording happened.
 - Optional phone alerts through [ntfy](https://ntfy.sh). Off by default, since the Ring app already alerts you.
 
 Planned features are in [ROADMAP.md](ROADMAP.md), such as keeping important clips forever.
@@ -31,6 +33,8 @@ Your Ring email and password go only to Ring. Only a login token is kept, in `.r
 ## The clips page
 Open `http://localhost:8080` on the recording computer, or `http://<its IP>:8080` from a phone on the same Wi-Fi.
 - **Clips:** thumbnails, newest first, under day headings, with 12-hour times. Filter by All / Today / Yesterday / Last 7 days / a picked date, and by All events / Rings / Motion. Tap a clip to play it; use **Newer / Older** to step through, and **Download** to save it.
+- **Thumbnails:** for a ring, the best frame in the 5 seconds after the ring (the visitor at the door). For motion, the frame that differs most from the empty scene, skipping blurry ones. Picking it takes about 2 seconds of CPU per clip, at low priority. `npm run rethumb` redoes the thumbnails of clips recorded before this existed.
+- **Fast to play, even over Tailscale:** once a clip is saved it's rewritten (no re-encoding) with its index at the front, so phones show its length and jump anywhere at once. Clips you've already watched aren't downloaded again unless they changed.
 - **Storage meter:** how much of your space is used and how many clips you have.
 - **Settings:** see below.
 - **iPhone:** in Safari, **Share → Add to Home Screen** to open it like an app.
@@ -57,8 +61,26 @@ Open the clips page → **Settings** tab, and unlock it with your PIN (set durin
 
 Purging runs after every clip and once an hour. If you edit `.env` by hand, restart the app.
 
+## Running 24/7 on Windows
+`npm run setup` (answer **y** to "Is this the one that will record 24/7?") or `windows\start-at-boot.bat` sets this up. Both ask for admin once.
+
+- **Boot task:** a scheduled task, **Doorbell recorder**, runs `windows\start-doorbell.bat` as SYSTEM at every boot (30 s after start-up, for Wi-Fi). Nobody has to sign in, and no password is stored. The task has no time limit, runs on battery and restarts if it fails. The batch file restarts the recorder 10 seconds after it stops.
+- **Fast Startup is turned off**, because otherwise "Shut down" is really hibernation and the boot task never runs. The old start-at-sign-in shortcut is removed.
+- **One recorder per computer.** A second copy would knock the first off Ring's push connection, so it logs why and exits.
+- **No window:** it runs in the background, so use these files in the `windows` folder:
+
+  | File | What it does |
+  |---|---|
+  | `watch-log.bat` | Shows the live log. Closing it doesn't stop the recorder |
+  | `stop-recorder.bat` | Stops it cleanly, and the stop is logged |
+  | `start-at-boot.bat` | Starts or restarts it, e.g. after updating the code. Also re-creates the boot task |
+  | `always-on.bat` | Never sleep on mains power (lid closed too), keep the USB disk and Wi-Fi powered, Private network, firewall rule for the clips page (home network and Tailscale only) |
+
+- **Logs:** `logs\recorder-YYYY-MM-DD.log`, kept 30 days, plus `logs\state.json`. Each start notes when the laptop booted and how the previous run ended (clean stop, crash, restart, power cut). While running, it notes any time the laptop was asleep or the recorder stalled, so every gap in recording is explained.
+- **Old hard disks:** while Windows Update installs, a laptop hard disk can be 100% busy for hours. The recorder never waits on the disk for logging or for the clips page, so it keeps recording and stays connected to Ring. Clips may still load slowly until the update finishes. An SSD fixes this for good.
+
 ## Watching clips when you're away (optional)
-Use [Tailscale](https://tailscale.com) (free): install it on the recording computer and your iPhone, and sign in to both with the same account. Then open `http://<computer's 100.x.y.z address>:8080` from anywhere. It stays private and no ports are opened. **Step-by-step: [SETUP.md → Tailscale](SETUP.md#watch-from-anywhere-with-tailscale-free)**.
+Use [Tailscale](https://tailscale.com) (free): install it on the recording computer and your iPhone, and sign in to both with the same account. Then open `http://<computer's 100.x.y.z address>:8080` from anywhere. It stays private and no ports are opened. On Windows, turn on **Run unattended** in Tailscale's Preferences (or run `tailscale up --unattended`), so Tailscale stays connected while nobody is signed in. With Tailscale left on, the 100.x address also works at home, so you need only one bookmark. **Step-by-step: [SETUP.md → Tailscale](SETUP.md#watch-from-anywhere-with-tailscale-free)**.
 
 ## Things to know
 - **Clips start about 3–8 seconds after the event.** Without a subscription Ring keeps no pre-roll, so the clip starts once live view connects.
@@ -76,8 +98,13 @@ Use [Tailscale](https://tailscale.com) (free): install it on the recording compu
 | `npm start` | Run the recorder |
 | `npm run debug` | Run with detailed Ring logging |
 | `npm run doctor` | Check everything and explain fixes |
+| `npm run test-clip` | With the recorder stopped: record a 15 s test clip, then check that rings reach this computer |
+| `npm run rethumb` | Redo the thumbnails of existing clips (safe while the recorder runs) |
 | `npm run login` | Log in to Ring again |
 | `npm run pin` | Set or change the Settings PIN |
+| `windows\start-at-boot.bat` | Windows: start or restart the recorder, and start it at every boot |
+| `windows\stop-recorder.bat` | Windows: stop the recorder |
+| `windows\watch-log.bat` | Windows: watch the log |
 
 ## Development
 ```

@@ -122,4 +122,5 @@ Tailscale links your own devices in a private network, so your iPhone can open t
 | Errors after updating | `npm install` (it also re-applies a needed fix to a Ring library) |
 
 ## Updating later
-Download the ZIP again and replace the app files. Keep `.env`, `.ring-token` and your clips. Or run `git pull`. Then run `npm install` (or step 1, prepare, again) and restart the recorder.
+Download the ZIP again and replace the app files. Keep `.env`, `.ring-token` and your clips. Or run `git pull`. Then run `npm install` (or step 1, prepare, again) and restart the recorder. On Windows, double-click `windows\start-at-boot.bat` to restart it.
+If the update improves thumbnails, `npm run rethumb` redoes them for clips you already have.
