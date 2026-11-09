@@ -3,6 +3,7 @@
 import fs from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
+import zlib from 'node:zlib'
 import { fileURLToPath } from 'node:url'
 import { FIELDS, Sessions, applySettings, currentSettings, pendingRestart, storedPinHash, validateSettings } from './settings.js'
 import { clipSummary } from './storage.js'
@@ -10,11 +11,34 @@ import { clipSummary } from './storage.js'
 const PAGE = path.join(path.dirname(fileURLToPath(import.meta.url)), 'web', 'index.html')
 const TYPES = { '.mp4': 'video/mp4', '.jpg': 'image/jpeg' }
 
-function sendFile(req, res, file, type) {
-  const { size } = fs.statSync(file)
-  const headers = { 'Content-Type': type, 'Accept-Ranges': 'bytes', 'Cache-Control': 'no-cache' }
+// Everything here is async: on a busy hard disk a synchronous stat or read can stall the whole
+// recorder, not just this request.
+async function sendFile(req, res, file, type) {
+  const stat = await fs.promises.stat(file).catch(() => null)
+  if (!stat?.isFile()) {
+    res.writeHead(404).end('Not found')
+    return
+  }
+  const { size } = stat
+  // The ETag changes when the file does (a clip still recording, or rewritten once finished), so
+  // browsers re-check each time but only download again when something changed.
+  const etag = `"${size.toString(36)}-${Math.floor(stat.mtimeMs).toString(36)}"`
+  // Thumbnails never change once made: keep them a week. Clips: re-check each time (cheap).
+  const cache = type === 'image/jpeg' ? 'private, max-age=604800' : 'no-cache'
+  const headers = { 'Content-Type': type, 'Accept-Ranges': 'bytes', 'Cache-Control': cache, ETag: etag, 'Last-Modified': stat.mtime.toUTCString() }
+  if (req.headers['if-none-match'] === etag) {
+    res.writeHead(304, headers).end()
+    return
+  }
+  if (type.startsWith('text/html') && /\bgzip\b/.test(req.headers['accept-encoding'] || '')) {
+    const body = zlib.gzipSync(await fs.promises.readFile(file))
+    res.writeHead(200, { ...headers, 'Content-Encoding': 'gzip', 'Content-Length': body.length, Vary: 'Accept-Encoding' })
+    res.end(req.method === 'HEAD' ? undefined : body)
+    return
+  }
   const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '')
-  if (range && (range[1] || range[2])) {
+  const ifRange = req.headers['if-range']
+  if (range && (range[1] || range[2]) && (!ifRange || ifRange === etag)) {
     const start = range[1] ? Number(range[1]) : Math.max(0, size - Number(range[2]))
     const end = range[1] && range[2] ? Math.min(Number(range[2]), size - 1) : size - 1
     if (start > end || start >= size) {
@@ -23,12 +47,12 @@ function sendFile(req, res, file, type) {
     }
     res.writeHead(206, { ...headers, 'Content-Range': `bytes ${start}-${end}/${size}`, 'Content-Length': end - start + 1 })
     if (req.method === 'HEAD') return res.end()
-    fs.createReadStream(file, { start, end }).pipe(res)
+    fs.createReadStream(file, { start, end }).on('error', () => res.destroy()).pipe(res)
     return
   }
   res.writeHead(200, { ...headers, 'Content-Length': size })
   if (req.method === 'HEAD') return res.end()
-  fs.createReadStream(file).pipe(res)
+  fs.createReadStream(file).on('error', () => res.destroy()).pipe(res)
 }
 
 const json = (res, status, body, headers = {}) => {
@@ -87,7 +111,7 @@ async function settingsApi(req, res, urlPath, { config, sessions, onSettingsChan
 
 export function startServer(root, port, { config = { maxStorageGb: 0, keepDays: 0 }, onSettingsChanged } = {}, log = console.log) {
   const sessions = new Sessions()
-  const server = http.createServer(async (req, res) => {
+  const handle = async (req, res) => {
     let urlPath
     try {
       urlPath = decodeURIComponent(new URL(req.url, 'http://x').pathname)
@@ -100,7 +124,7 @@ export function startServer(root, port, { config = { maxStorageGb: 0, keepDays: 
       return sendFile(req, res, PAGE, 'text/html; charset=utf-8')
     }
     if (urlPath === '/api/clips') {
-      return json(res, 200, { ...clipSummary(root), capBytes: config.maxStorageGb * 1024 ** 3, keepDays: config.keepDays })
+      return json(res, 200, { ...(await clipSummary(root)), capBytes: config.maxStorageGb * 1024 ** 3, keepDays: config.keepDays })
     }
     if (urlPath.startsWith('/api/')) {
       try {
@@ -113,12 +137,17 @@ export function startServer(root, port, { config = { maxStorageGb: 0, keepDays: 
     const file = path.join(root, path.normalize(urlPath))
     const rel = path.relative(root, file)
     const type = TYPES[path.extname(file)]
-    if (rel.startsWith('..') || path.isAbsolute(rel) || !type || !fs.existsSync(file)) {
+    if (rel.startsWith('..') || path.isAbsolute(rel) || !type) {
       res.writeHead(404).end('Not found')
       return
     }
-    sendFile(req, res, file, type)
-  })
+    return sendFile(req, res, file, type)
+  }
+  const server = http.createServer((req, res) => handle(req, res).catch((e) => {
+    log(`clips page error for ${req.url}: ${e.message}`)
+    if (!res.headersSent) res.writeHead(500)
+    res.end()
+  }))
   server.listen(port, () => log(`clips page: http://localhost:${port}`))
   return server
 }

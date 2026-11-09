@@ -95,6 +95,7 @@ Tailscale links your own devices in a private network, so your iPhone can open t
 2. Open Tailscale. Click its icon (Mac: menu bar at the top right; Windows: system tray at the bottom right, possibly under **^**) → **Log in**, and sign in with your Google account.
 3. Allow it to add a VPN configuration when asked (Mac: System Settings may ask you to approve it).
 4. Click the icon again. Under **This Device** you'll see its Tailscale address, `100.x.y.z`. Click it to copy it.
+5. **Windows only:** the recorder runs at boot without anyone signing in, so Tailscale must too. Click the icon → **Preferences** → tick **Run unattended**. (Or in a terminal: `tailscale up --unattended`.) Without it, Tailscale disconnects whenever nobody is signed in to Windows.
 
 **On your iPhone:**
 1. App Store → install **Tailscale**.

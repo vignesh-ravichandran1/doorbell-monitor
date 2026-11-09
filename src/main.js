@@ -10,7 +10,7 @@ import { ClipSession } from './clip-session.js'
 import { record } from './recorder.js'
 import { watchPush } from './push-debug.js'
 import { APP_DIR, config, findFfmpeg, loadToken, saveToken } from './config.js'
-import { startFileLog, trackLifecycle } from './lifecycle.js'
+import { flushLog, startFileLog, trackLifecycle } from './lifecycle.js'
 import { startServer } from './server.js'
 import { prune } from './storage.js'
 
@@ -34,6 +34,7 @@ const pushStatus = watchPush(log, { verbose: debug })
 // would knock each other off it. Exit code 3 = don't restart (see windows/start-doorbell.bat).
 if (await portInUse(config.webPort)) {
   log(`another recorder is already running (port ${config.webPort} in use); this one exits`)
+  await flushLog()
   process.exit(3)
 }
 trackLifecycle(logsDir, log, { status: pushStatus })
@@ -69,6 +70,7 @@ async function main() {
   const token = loadToken()
   if (!token) {
     console.error('No Ring login yet. Run: npm run setup')
+    await flushLog()
     process.exit(1)
   }
   fs.mkdirSync(config.recordingsDir, { recursive: true })
@@ -147,5 +149,5 @@ async function main() {
 
 main().catch((e) => {
   console.error(e)
-  process.exit(1)
+  flushLog().then(() => process.exit(1))
 })
