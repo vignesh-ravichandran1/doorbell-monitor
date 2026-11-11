@@ -6,7 +6,7 @@ import path from 'node:path'
 import zlib from 'node:zlib'
 import { fileURLToPath } from 'node:url'
 import { FIELDS, Sessions, applySettings, currentSettings, pendingRestart, storedPinHash, validateSettings } from './settings.js'
-import { clipSummary } from './storage.js'
+import { clipSummary, deleteClips } from './storage.js'
 
 const PAGE = path.join(path.dirname(fileURLToPath(import.meta.url)), 'web', 'index.html')
 const TYPES = { '.mp4': 'video/mp4', '.jpg': 'image/jpeg' }
@@ -60,13 +60,13 @@ const json = (res, status, body, headers = {}) => {
   res.end(JSON.stringify(body))
 }
 
-function readJson(req) {
+function readJson(req, maxBytes = 20_000) {
   return new Promise((resolve, reject) => {
     if (!/^application\/json/.test(req.headers['content-type'] || '')) return reject(new Error('Expected JSON'))
     let body = ''
     req.on('data', (c) => {
       body += c
-      if (body.length > 20_000) req.destroy()
+      if (body.length > maxBytes) req.destroy()
     })
     req.on('end', () => {
       try { resolve(JSON.parse(body || '{}')) } catch { reject(new Error('Bad JSON')) }
@@ -79,7 +79,7 @@ const cookie = (req, name) => (req.headers.cookie || '').split(/;\s*/).find((c) 
 const SESSION_COOKIE = 'doorbell_session'
 
 /** Settings API: PIN login, then read/change settings. Changes apply live where possible. */
-async function settingsApi(req, res, urlPath, { config, sessions, onSettingsChanged }) {
+async function settingsApi(req, res, urlPath, { root, config, sessions, onSettingsChanged, log }) {
   const token = cookie(req, SESSION_COOKIE)
   if (urlPath === '/api/login' && req.method === 'POST') {
     const { pin } = await readJson(req)
@@ -92,6 +92,15 @@ async function settingsApi(req, res, urlPath, { config, sessions, onSettingsChan
   if (urlPath === '/api/logout' && req.method === 'POST') {
     sessions.logout(token)
     return json(res, 200, { ok: true }, { 'Set-Cookie': `${SESSION_COOKIE}=; Path=/; Max-Age=0` })
+  }
+  if (urlPath === '/api/clips/delete' && req.method === 'POST') {
+    // Deleting is permanent, so it needs the same PIN unlock as Settings.
+    if (!sessions.valid(token)) return json(res, 401, { error: 'login', pinSet: Boolean(storedPinHash()) })
+    const { urls } = await readJson(req, 2_000_000) // "select all" can be thousands of clips
+    if (!Array.isArray(urls) || !urls.length) return json(res, 400, { error: 'No clips given' })
+    const result = await deleteClips(root, urls)
+    log(`deleted ${result.deleted.length} clip(s) from the web page${result.skipped.length ? `, skipped ${result.skipped.length}` : ''}`)
+    return json(res, 200, result)
   }
   if (urlPath !== '/api/settings') return json(res, 404, { error: 'Not found' })
   if (!sessions.valid(token)) return json(res, 401, { error: 'login', pinSet: Boolean(storedPinHash()) })
@@ -128,7 +137,7 @@ export function startServer(root, port, { config = { maxStorageGb: 0, keepDays: 
     }
     if (urlPath.startsWith('/api/')) {
       try {
-        return await settingsApi(req, res, urlPath, { config, sessions, onSettingsChanged })
+        return await settingsApi(req, res, urlPath, { root, config, sessions, onSettingsChanged, log })
       } catch (e) {
         return json(res, 400, { error: e.message })
       }

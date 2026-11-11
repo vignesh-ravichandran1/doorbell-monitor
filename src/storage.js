@@ -109,3 +109,51 @@ export async function clipSummary(root) {
   clips.sort((a, b) => `${b.day} ${b.time}`.localeCompare(`${a.day} ${a.time}`))
   return { clips, usedBytes }
 }
+
+const CLIP_NAME_RE = /^\d{6}_[a-z]+_[\w-]+\.mp4$/
+
+/**
+ * Delete clips by their page URLs (/<day>/<name>.mp4), with every file sharing the clip's
+ * name (thumbnail, tags). Only real clip paths inside root are accepted, and a clip written
+ * to in the last `busyMs` is skipped because it is probably still recording.
+ */
+export async function deleteClips(root, urls, { now = Date.now(), busyMs = 15_000 } = {}) {
+  const deleted = []
+  const skipped = []
+  const days = new Set()
+  for (const url of urls) {
+    let day, name
+    try {
+      [, day, name] = decodeURIComponent(String(url).split('?')[0]).split('/')
+    } catch {
+      skipped.push({ url, reason: 'bad address' })
+      continue
+    }
+    if (!DAY_RE.test(day || '') || !CLIP_NAME_RE.test(name || '')) {
+      skipped.push({ url, reason: 'not a clip' })
+      continue
+    }
+    const clip = path.join(root, day, name)
+    const st = await fs.promises.stat(clip).catch(() => null)
+    if (!st) {
+      skipped.push({ url, reason: 'already gone' })
+      continue
+    }
+    if (now - st.mtimeMs < busyMs) {
+      skipped.push({ url, reason: 'still recording' })
+      continue
+    }
+    const stem = name.slice(0, -'.mp4'.length)
+    const files = await fs.promises.readdir(path.join(root, day))
+    for (const f of files) {
+      if (f === name || f.startsWith(`${stem}.`)) await fs.promises.rm(path.join(root, day, f), { force: true })
+    }
+    deleted.push(url)
+    days.add(day)
+  }
+  for (const day of days) {
+    const dir = path.join(root, day)
+    if ((await fs.promises.readdir(dir)).length === 0) await fs.promises.rmdir(dir).catch(() => {})
+  }
+  return { deleted, skipped }
+}

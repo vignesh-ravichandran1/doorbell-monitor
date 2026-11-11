@@ -63,6 +63,26 @@ dialog::backdrop { background: rgba(0,0,0,.75); }
 @media (max-width: 700px) { dialog { border-radius: 0; } }
 dialog video { width: 100%; max-height: 75vh; display: block; background: #000; }
 .bar { display: flex; gap: 8px; align-items: center; padding: 10px 12px; flex-wrap: wrap; }
+.bar .danger, .selbar .danger { background: #b91c1c; color: #fff; }
+
+/* Selecting clips to delete */
+.card .check { display: none; position: absolute; right: 8px; top: 8px; width: 26px; height: 26px; border-radius: 50%; border: 2px solid #fff; background: rgba(0,0,0,.35); color: transparent; font-size: 15px; line-height: 22px; text-align: center; }
+body.selecting .card .check { display: block; }
+.card.selected { outline: 3px solid var(--accent); outline-offset: -3px; }
+.card.selected .check { background: var(--accent); border-color: var(--accent); color: #fff; }
+.selbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 10px max(16px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); background: var(--surface); border-top: 1px solid var(--line); box-shadow: 0 -2px 10px rgba(0,0,0,.08); }
+.selbar span { flex: 1; min-width: 100px; font-weight: 600; }
+.selbar button { border: 1px solid var(--line); background: var(--bg); color: var(--fg); border-radius: 8px; padding: 9px 12px; font: inherit; font-size: 14px; cursor: pointer; }
+.selbar button.danger { border-color: #b91c1c; }
+.selbar button:disabled { opacity: .45; cursor: default; }
+body.selecting main { padding-bottom: 90px; }
+#pinbox { border: 0; border-radius: 12px; padding: 20px; width: min(340px, 92vw); background: var(--surface); color: var(--fg); }
+#pinbox::backdrop { background: rgba(0,0,0,.5); }
+#pinbox h3 { margin: 0 0 6px; }
+#pinbox p { margin: 0 0 12px; color: var(--muted); font-size: 14px; }
+#pinbox input { width: 100%; border: 1px solid var(--line); background: var(--bg); color: var(--fg); border-radius: 8px; padding: 9px 10px; font: inherit; font-size: 16px; }
+#pinbox .error { color: #dc2626; font-size: 13px; margin-top: 6px; }
+#pinbox .row { justify-content: flex-end; margin-top: 14px; }
 .bar .title { flex: 1; min-width: 160px; font-size: 14px; }
 @media (max-width: 700px) {
   dialog { margin: auto 0; width: 100vw; }
@@ -141,6 +161,7 @@ dialog video { width: 100%; max-height: 75vh; display: block; background: #000; 
       <button class="chip" data-type="all">All events</button>
       <button class="chip" data-type="ding">Rings</button>
       <button class="chip" data-type="motion">Motion</button>
+      <button class="chip" id="select-toggle" aria-pressed="false">Select</button>
       <span class="count" id="count"></span>
     </div>
   </div>
@@ -256,8 +277,27 @@ dialog video { width: 100%; max-height: 75vh; display: block; background: #000; 
     <button id="newer" title="Newer clip (←)">‹ Newer</button>
     <button id="older" title="Older clip (→)">Older ›</button>
     <a id="download" download>Download</a>
+    <button id="vdelete" class="danger">Delete</button>
     <button id="close">Close</button>
   </div>
+</dialog>
+
+<div class="selbar" id="selbar" hidden>
+  <span id="selcount">0 selected</span>
+  <button id="sel-all">Select all</button>
+  <button id="sel-none">Clear</button>
+  <button id="sel-delete" class="danger" disabled>Delete</button>
+  <button id="sel-done">Done</button>
+</div>
+
+<dialog id="pinbox">
+  <form id="pinform">
+    <h3>Enter PIN to delete</h3>
+    <p id="pinmsg">Deleting clips needs the Settings PIN.</p>
+    <input type="password" id="pin2" inputmode="numeric" autocomplete="current-password" aria-label="PIN">
+    <div class="error" id="pinerr" hidden></div>
+    <div class="row"><button type="button" class="btn secondary" id="pincancel">Cancel</button><button type="submit" class="btn">Unlock</button></div>
+  </form>
 </dialog>
 
 <script>
@@ -265,6 +305,8 @@ const $ = (id) => document.getElementById(id)
 const state = { range: 'all', day: '', type: 'all' }
 let data = { clips: [], usedBytes: 0, capBytes: 0 }
 let shown = []
+let selecting = false
+const selected = new Set() // urls of clips ticked for deletion
 let current = -1
 let loaded = false
 
@@ -364,13 +406,20 @@ function renderList() {
     const card = document.createElement('button')
     card.className = 'card'
     card.innerHTML = `<div class="thumb">${c.thumb ? `<img loading="lazy" alt="" src="${c.thumb}">` : '<div class="none">No preview</div>'}` +
-      `<span class="badge ${c.event}">${label[c.event] || c.event}</span></div><div class="meta">${fmtTime(c.time)}</div>`
-    card.addEventListener('click', () => openClip(i))
+      `<span class="badge ${c.event}">${label[c.event] || c.event}</span><span class="check">✓</span></div><div class="meta">${fmtTime(c.time)}</div>`
+    card.classList.toggle('selected', selected.has(c.url))
+    card.addEventListener('click', () => {
+      if (!selecting) return openClip(i)
+      if (selected.has(c.url)) selected.delete(c.url)
+      else selected.add(c.url)
+      card.classList.toggle('selected', selected.has(c.url))
+      updateSelbar()
+    })
     grid.append(card)
   })
 }
 
-function render() { renderFilters(); renderList(); writeHash() }
+function render() { renderFilters(); renderList(); writeHash(); if (selecting) updateSelbar() }
 
 function openClip(i) {
   current = i
@@ -407,6 +456,89 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'ArrowRight') $('older').click()
 })
 
+// ---- Selecting and deleting clips ----
+function updateSelbar() {
+  for (const url of selected) if (!data.clips.some((c) => c.url === url)) selected.delete(url) // gone meanwhile
+  $('selcount').textContent = `${selected.size} selected`
+  $('sel-delete').disabled = selected.size === 0
+  $('sel-delete').textContent = selected.size ? `Delete ${selected.size}` : 'Delete'
+  $('sel-all').textContent = `Select all ${shown.length}`
+}
+
+function setSelecting(on) {
+  selecting = on
+  selected.clear()
+  document.body.classList.toggle('selecting', on)
+  $('selbar').hidden = !on
+  $('select-toggle').setAttribute('aria-pressed', on)
+  $('select-toggle').textContent = on ? 'Cancel' : 'Select'
+  renderList()
+  updateSelbar()
+}
+
+// Shows the PIN box; resolves true once unlocked, false if cancelled.
+function askPin(pinSet) {
+  return new Promise((resolve) => {
+    $('pinmsg').innerHTML = pinSet ? 'Deleting clips needs the Settings PIN.'
+      : 'No PIN is set yet. On the recording computer, run <code>npm run pin</code> first.'
+    $('pin2').disabled = !pinSet
+    $('pinerr').hidden = true
+    $('pin2').value = ''
+    const done = (ok) => {
+      $('pinform').onsubmit = null
+      $('pincancel').onclick = null
+      $('pinbox').close()
+      resolve(ok)
+    }
+    $('pincancel').onclick = () => done(false)
+    $('pinform').onsubmit = async (e) => {
+      e.preventDefault()
+      const { status, data: d } = await api('POST', '/api/login', { pin: $('pin2').value })
+      $('pin2').value = ''
+      if (status === 200) return done(true)
+      $('pinerr').textContent = d.error || 'Wrong PIN.'
+      $('pinerr').hidden = false
+    }
+    $('pinbox').showModal()
+    if (pinSet) $('pin2').focus()
+  })
+}
+
+async function deleteUrls(urls) {
+  const n = urls.length
+  if (!confirm(`Delete ${n} clip${n === 1 ? '' : 's'}? This can't be undone.`)) return false
+  let res = await api('POST', '/api/clips/delete', { urls })
+  if (res.status === 401) {
+    if (!(await askPin(res.data.pinSet))) return false
+    res = await api('POST', '/api/clips/delete', { urls })
+  }
+  if (res.status !== 200) {
+    alert(`Couldn't delete: ${res.data.error || res.status}`)
+    return false
+  }
+  const gone = new Set(res.data.deleted)
+  data.clips = data.clips.filter((c) => !gone.has(c.url))
+  for (const url of gone) selected.delete(url)
+  const busy = res.data.skipped.filter((x) => x.reason === 'still recording').length
+  if (busy) alert(`${busy} clip${busy === 1 ? ' is' : 's are'} still recording and ${busy === 1 ? 'was' : 'were'} not deleted. Try again in a minute.`)
+  renderList()
+  updateSelbar()
+  load() // refresh the storage meter
+  return true
+}
+
+$('select-toggle').addEventListener('click', () => setSelecting(!selecting))
+$('sel-done').addEventListener('click', () => setSelecting(false))
+$('sel-none').addEventListener('click', () => { selected.clear(); renderList(); updateSelbar() })
+$('sel-all').addEventListener('click', () => { for (const c of shown) selected.add(c.url); renderList(); updateSelbar() })
+$('sel-delete').addEventListener('click', async () => {
+  if (await deleteUrls([...selected]) && !data.clips.length) setSelecting(false)
+})
+$('vdelete').addEventListener('click', async () => {
+  const c = shown[current]
+  if (c && await deleteUrls([c.url])) closeClip()
+})
+
 async function load() {
   try {
     const res = await fetch('/api/clips', { cache: 'no-store' })
@@ -415,6 +547,7 @@ async function load() {
     data = next
     renderStats()
     if ((changed || !loaded) && current === -1) renderList() // don't reshuffle while a clip is playing
+    if (selecting) updateSelbar()
     loaded = true
   } catch {
     $('stats').textContent = "Can't reach the recorder. Is it running?"

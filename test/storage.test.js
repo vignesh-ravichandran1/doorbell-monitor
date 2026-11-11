@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { test } from 'node:test'
-import { clipPath, clipSummary, prune } from '../src/storage.js'
+import { clipPath, clipSummary, prune, deleteClips } from '../src/storage.js'
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'doorbell-'))
 const quiet = () => {}
@@ -87,4 +87,38 @@ test('clipSummary orders rings and motion together, newest first', async () => {
     '2026-01-31 10:00:00 motion',
     '2026-01-31 09:00:00 ding',
   ])
+})
+
+test('deleteClips removes a clip with its thumbnail and tags, then the empty day folder', async () => {
+  const root = tmp()
+  const clip = makeClip(root, '2026-01-31', '090000_ding_a.mp4')
+  fs.writeFileSync(clip.replace('.mp4', '.json'), '{}')
+  const keep = makeClip(root, '2026-01-30', '080000_motion_a.mp4')
+  const old = Date.now() - 60_000
+  for (const f of [clip, keep]) fs.utimesSync(f, old / 1000, old / 1000)
+  const { deleted, skipped } = await deleteClips(root, ['/2026-01-31/090000_ding_a.mp4'])
+  assert.deepEqual(deleted, ['/2026-01-31/090000_ding_a.mp4'])
+  assert.deepEqual(skipped, [])
+  assert.ok(!fs.existsSync(path.join(root, '2026-01-31')), 'empty day folder removed')
+  assert.ok(fs.existsSync(keep) && fs.existsSync(keep.replace('.mp4', '.jpg')))
+})
+
+test('deleteClips refuses anything that is not a clip inside the recordings folder', async () => {
+  const root = tmp()
+  fs.writeFileSync(path.join(root, 'secret.txt'), 'x')
+  const { deleted, skipped } = await deleteClips(root, [
+    '/../package.json', '/2026-01-31/../../secret.txt', '/secret.txt', '/2026-01-31/notes.mp4', '%E0%A4%A',
+  ])
+  assert.deepEqual(deleted, [])
+  assert.equal(skipped.length, 5)
+  assert.ok(fs.existsSync(path.join(root, 'secret.txt')))
+})
+
+test('deleteClips skips a clip that is still being recorded', async () => {
+  const root = tmp()
+  const clip = makeClip(root, '2026-01-31', '090000_motion_a.mp4') // just written
+  const { deleted, skipped } = await deleteClips(root, ['/2026-01-31/090000_motion_a.mp4'])
+  assert.deepEqual(deleted, [])
+  assert.equal(skipped[0].reason, 'still recording')
+  assert.ok(fs.existsSync(clip))
 })
