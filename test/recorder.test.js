@@ -18,12 +18,24 @@ function fakeCamera() {
     id: 'fake',
     async streamVideo({ output }) {
       const onCallEnded = new ReplaySubject(1)
-      const ff = spawn(ffmpeg, ['-hide_banner', '-loglevel', 'error', '-re', '-f', 'lavfi', '-i', 'testsrc=size=640x360:rate=15',
-        '-c:v', 'libx264', '-preset', 'ultrafast', '-g', '45', ...output]) // keyframe every 3 s, like Ring
-      ff.on('exit', () => onCallEnded.next())
+      let ff = null
+      let stopped = false
+      // Video only starts 2 s after it's asked for, like a slow ffmpeg start on Windows.
+      const startTimer = setTimeout(() => {
+        ff = spawn(ffmpeg, ['-hide_banner', '-loglevel', 'error', '-re', '-f', 'lavfi', '-i', 'testsrc=size=640x360:rate=15',
+          '-c:v', 'libx264', '-preset', 'ultrafast', '-g', '45', ...output]) // keyframe every 3 s, like Ring
+        ff.on('exit', () => onCallEnded.next())
+      }, 2000)
       // Like ring-client-api on Windows: report 'ended' at once and kill ffmpeg outright, so it
       // can't finish the file. The clip must still play and be (nearly) full length.
-      return { onCallEnded, stop: () => { onCallEnded.next(); ff.kill('SIGKILL') } }
+      const stop = () => {
+        if (stopped) return
+        stopped = true
+        clearTimeout(startTimer)
+        onCallEnded.next()
+        ff?.kill('SIGKILL')
+      }
+      return { onCallEnded, stop }
     },
   }
 }
@@ -37,7 +49,8 @@ function duration(file) {
 test('a ring during a motion clip extends it and makes it a ring clip', { timeout: 60_000 }, async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'doorbell-rec-'))
   const session = new ClipSession('motion', { dingSeconds: 6, motionSeconds: 3, maxSeconds: 8 })
-  setTimeout(() => session.extend('ding'), 1500)
+  // The ring comes 1.5 s into the video (video may take a moment to start, more on Windows).
+  const ringLater = setInterval(() => { if (session.startedAt && Date.now() - session.startedAt >= 1500) { clearInterval(ringLater); session.extend('ding') } }, 50)
   const { clip, thumb } = await record(fakeCamera(), session, { ffmpeg, recordingsDir: dir, maxClipSeconds: 8, log: () => {} })
 
   assert.match(path.basename(clip), /^\d{6}_ding_fake\.mp4$/)

@@ -43,6 +43,13 @@ export async function record(camera, session, { ffmpeg, recordingsDir, maxClipSe
     output: ['-t', String(maxClipSeconds + 10), '-flush_packets', '1', '-frag_duration', '500000',
       '-movflags', '+frag_keyframe+empty_moov+default_base_moof', clip],
   })
+  // Count the clip's length from when video actually starts arriving, not from when it was
+  // requested: ffmpeg can take a second or two to start (more on Windows), and that time
+  // would otherwise come off every clip.
+  for (const end = Date.now() + 15_000; Date.now() < end;) {
+    if ((await fs.promises.stat(clip).catch(() => null))?.size > 0) break
+    await sleep(100)
+  }
   session.start()
   let ended = false
   firstValueFrom(call.onCallEnded).then(() => { ended = true })
