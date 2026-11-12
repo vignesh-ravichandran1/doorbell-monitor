@@ -36,6 +36,21 @@ const npm = (args) => (isWin ? run('npm.cmd', args, { shell: true }) : run('npm'
 
 const tail = (e) => `${e.stdout || ''}\n${e.stderr || ''}`.trim().split('\n').slice(-8).join('\n') || e.message
 
+// For a failed `npm test`: the failing tests' names and their error lines, not just the summary.
+function failures(e) {
+  const lines = `${e.stdout || ''}\n${e.stderr || ''}`.split('\n')
+  const out = []
+  lines.forEach((line, i) => {
+    if (!/^\s*not ok \d+/.test(line)) return
+    out.push(line.trim())
+    for (const next of lines.slice(i + 1, i + 25)) {
+      if (/^\s*(ok|not ok) \d+/.test(next)) break
+      if (/^\s*(error|expected|actual|code|location):/.test(next)) out.push(`  ${next.trim()}`)
+    }
+  })
+  return out.length ? out.slice(0, 20).join('\n') : tail(e)
+}
+
 const readJson = (file) => {
   try {
     return JSON.parse(fs.readFileSync(file, 'utf8'))
@@ -106,7 +121,7 @@ export async function apply(log = console.log) {
       log(`update to ${to.slice(0, 7)} failed its checks; rolling back to ${from.slice(0, 7)}`)
       await git('reset', '--hard', from)
       await npm(['install', '--no-audit', '--no-fund']).catch(() => {})
-      throw new Error(`The update failed its checks and was undone. Details:\n${tail(e)}`)
+      throw new Error(`The update failed its checks and was undone. Details:\n${failures(e)}`)
     }
     writeJson(STATE, { from, to, at: Date.now(), starts: 0 })
     fs.rmSync(ROLLED_BACK, { force: true })

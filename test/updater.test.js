@@ -64,11 +64,18 @@ test('check lists new commits; apply fast-forwards, installs, tests and records 
 
 test('an update whose tests fail is undone', { timeout: 120_000 }, async () => {
   const { work, laptop } = setup()
-  writePkg(work, 'node -e "process.exit(1)"')
+  fs.writeFileSync(path.join(work, 'fail.js'), "console.log('ok 1 - fine\\nnot ok 2 - clip test\\n  error: boom\\n  location: x.js:1'); process.exit(1)")
+  writePkg(work, 'node fail.js')
   commit(work, 'Broken update')
   const u = await updaterOf(laptop)
   const before = head(laptop)
-  await assert.rejects(u.apply(quiet), /failed its checks and was undone/)
+  await assert.rejects(u.apply(quiet), (e) => {
+    assert.match(e.message, /failed its checks and was undone/)
+    assert.match(e.message, /not ok 2 - clip test/, 'names the failing test')
+    assert.match(e.message, /error: boom/)
+    assert.doesNotMatch(e.message, /ok 1 - fine/)
+    return true
+  })
   assert.equal(head(laptop), before)
   assert.equal(subject(laptop), 'v1')
 })
