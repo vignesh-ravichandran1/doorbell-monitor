@@ -163,9 +163,14 @@ export class Sessions {
       return { error: 'Wrong PIN.' }
     }
     this.fails = 0
+    return { token: this.issue(now) }
+  }
+
+  /** A new logged-in browser, after the PIN or a Face ID check passed. */
+  issue(now = Date.now()) {
     const token = crypto.randomBytes(24).toString('hex')
     this.tokens.set(token, now + this.ttlMs)
-    return { token }
+    return token
   }
 
   valid(token, now = Date.now()) {

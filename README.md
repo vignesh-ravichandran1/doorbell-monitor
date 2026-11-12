@@ -35,6 +35,8 @@ Open `http://localhost:8080` on the recording computer, or `http://<its IP>:8080
 - **Clips:** thumbnails, newest first, under day headings, with 12-hour times. Filter by All / Today / Yesterday / Last 7 days / a picked date, and by All events / Rings / Motion. Tap a clip to play it; use **Newer / Older** to step through, and **Download** to save it.
 - **Thumbnails:** for a ring, the best frame in the 5 seconds after the ring (the visitor at the door). For motion, the frame that differs most from the empty scene, skipping blurry ones. Picking it takes about 2 seconds of CPU per clip, at low priority. `npm run rethumb` redoes the thumbnails of clips recorded before this existed.
 - **Fast to play, even over Tailscale:** once a clip is saved it's rewritten (no re-encoding) with its index at the front, so phones show its length and jump anywhere at once. Clips you've already watched aren't downloaded again unless they changed.
+- **Face ID:** unlock Settings and deleting with Face ID instead of the PIN, on the https Tailscale address. See [SETUP.md → Face ID](SETUP.md#face-id-https-through-tailscale).
+- **Updates from your phone:** Settings → App updates. It checks, installs, tests and restarts, and rolls back if anything fails. See [SETUP.md → Updating from your phone](SETUP.md#updating-from-your-phone).
 - **Delete clips:** tap **Select**, tick clips (or **Select all**, which takes the clips the filters show), then **Delete**. Or tap **Delete** while watching a clip. Deleting needs the Settings PIN and can't be undone. A clip that's still recording is skipped.
 - **Storage meter:** how much of your space is used and how many clips you have.
 - **Settings:** see below.

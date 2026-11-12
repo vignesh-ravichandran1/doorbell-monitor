@@ -6,7 +6,9 @@ import path from 'node:path'
 import zlib from 'node:zlib'
 import { fileURLToPath } from 'node:url'
 import { FIELDS, Sessions, applySettings, currentSettings, pendingRestart, storedPinHash, validateSettings } from './settings.js'
+import { Passkeys } from './passkeys.js'
 import { clipSummary, deleteClips } from './storage.js'
+import * as updater from './updater.js'
 
 const PAGE = path.join(path.dirname(fileURLToPath(import.meta.url)), 'web', 'index.html')
 const TYPES = { '.mp4': 'video/mp4', '.jpg': 'image/jpeg' }
@@ -78,23 +80,49 @@ function readJson(req, maxBytes = 20_000) {
 const cookie = (req, name) => (req.headers.cookie || '').split(/;\s*/).find((c) => c.startsWith(`${name}=`))?.slice(name.length + 1)
 const SESSION_COOKIE = 'doorbell_session'
 
-/** Settings API: PIN login, then read/change settings. Changes apply live where possible. */
-async function settingsApi(req, res, urlPath, { root, config, sessions, onSettingsChanged, log }) {
+const sessionCookie = (token) => ({
+  'Set-Cookie': `${SESSION_COOKIE}=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${12 * 3600}`,
+})
+
+// Who did something, for the log: the Tailscale user (behind `tailscale serve`) and address.
+const who = (req) => [req.headers['tailscale-user-login'], req.headers['x-forwarded-for'] || req.socket.remoteAddress]
+  .filter(Boolean).join(' from ')
+
+/** Settings API: PIN or Face ID unlock, then settings, clip deletion, passkeys and updates. */
+async function settingsApi(req, res, urlPath, { root, config, sessions, passkeys, onSettingsChanged, onRestart, log }) {
   const token = cookie(req, SESSION_COOKIE)
   if (urlPath === '/api/login' && req.method === 'POST') {
     const { pin } = await readJson(req)
     const result = sessions.login(pin, storedPinHash())
     if (result.error) return json(res, 401, { error: result.error })
-    return json(res, 200, { ok: true }, {
-      'Set-Cookie': `${SESSION_COOKIE}=${result.token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${12 * 3600}`,
-    })
+    return json(res, 200, { ok: true }, sessionCookie(result.token))
+  }
+  if (urlPath === '/api/auth/status' && req.method === 'GET') {
+    const rpID = new URL(req.url, 'http://x').searchParams.get('rp') || ''
+    return json(res, 200, { pinSet: Boolean(storedPinHash()), unlocked: sessions.valid(token), passkeys: passkeys.list(rpID).length })
+  }
+  if (urlPath === '/api/passkey/login-options' && req.method === 'POST') {
+    const { rpID } = await readJson(req)
+    const options = await passkeys.authenticationOptions(String(rpID || ''))
+    if (!options) return json(res, 404, { error: 'Face ID isn\'t set up for this address yet.' })
+    return json(res, 200, options)
+  }
+  if (urlPath === '/api/passkey/login' && req.method === 'POST') {
+    const { response } = await readJson(req)
+    try {
+      const name = await passkeys.authenticate(response)
+      log(`unlocked with Face ID (${name}) by ${who(req)}`)
+      return json(res, 200, { ok: true }, sessionCookie(sessions.issue()))
+    } catch (e) {
+      return json(res, 401, { error: e.message })
+    }
   }
   if (urlPath === '/api/logout' && req.method === 'POST') {
     sessions.logout(token)
     return json(res, 200, { ok: true }, { 'Set-Cookie': `${SESSION_COOKIE}=; Path=/; Max-Age=0` })
   }
   if (urlPath === '/api/clips/delete' && req.method === 'POST') {
-    // Deleting is permanent, so it needs the same PIN unlock as Settings.
+    // Deleting is permanent, so it needs the same unlock as Settings.
     if (!sessions.valid(token)) return json(res, 401, { error: 'login', pinSet: Boolean(storedPinHash()) })
     const { urls } = await readJson(req, 2_000_000) // "select all" can be thousands of clips
     if (!Array.isArray(urls) || !urls.length) return json(res, 400, { error: 'No clips given' })
@@ -102,8 +130,51 @@ async function settingsApi(req, res, urlPath, { root, config, sessions, onSettin
     log(`deleted ${result.deleted.length} clip(s) from the web page${result.skipped.length ? `, skipped ${result.skipped.length}` : ''}`)
     return json(res, 200, result)
   }
-  if (urlPath !== '/api/settings') return json(res, 404, { error: 'Not found' })
+
+  // Everything below needs an unlocked browser.
   if (!sessions.valid(token)) return json(res, 401, { error: 'login', pinSet: Boolean(storedPinHash()) })
+
+  if (urlPath === '/api/passkeys' && req.method === 'GET') return json(res, 200, { passkeys: passkeys.list() })
+  if (urlPath === '/api/passkey/register-options' && req.method === 'POST') {
+    const { rpID } = await readJson(req)
+    return json(res, 200, await passkeys.registrationOptions(String(rpID || '')))
+  }
+  if (urlPath === '/api/passkey/register' && req.method === 'POST') {
+    const { response, name } = await readJson(req)
+    try {
+      await passkeys.register(response, name)
+      log(`Face ID added (${name}) by ${who(req)}`)
+      return json(res, 200, { passkeys: passkeys.list() })
+    } catch (e) {
+      return json(res, 400, { error: e.message })
+    }
+  }
+  if (urlPath === '/api/passkey/remove' && req.method === 'POST') {
+    const { id } = await readJson(req)
+    if (passkeys.remove(String(id))) log(`Face ID removed by ${who(req)}`)
+    return json(res, 200, { passkeys: passkeys.list() })
+  }
+
+  if (urlPath === '/api/update/status' && req.method === 'GET') {
+    return json(res, 200, { version: await updater.version(), restartsItself: Boolean(process.env.DOORBELL_SUPERVISED), rolledBack: updater.lastRollback() })
+  }
+  if (urlPath === '/api/update/check' && req.method === 'POST') return json(res, 200, await updater.check())
+  if (urlPath === '/api/update/apply' && req.method === 'POST') {
+    log(`update requested by ${who(req)}`)
+    try {
+      const { from, to } = await updater.apply(log)
+      log(`updated ${from} -> ${to}`)
+      const restartsItself = Boolean(process.env.DOORBELL_SUPERVISED)
+      json(res, 200, { from, to, restarting: restartsItself })
+      if (restartsItself) setTimeout(() => onRestart?.(), 1000) // let the response reach the phone first
+      return
+    } catch (e) {
+      log(`update failed: ${e.message.split('\n')[0]}`)
+      return json(res, 400, { error: e.message })
+    }
+  }
+
+  if (urlPath !== '/api/settings') return json(res, 404, { error: 'Not found' })
 
   if (req.method === 'GET') {
     return json(res, 200, { settings: currentSettings(config), fields: FIELDS, restart: pendingRestart(config) })
@@ -118,7 +189,7 @@ async function settingsApi(req, res, urlPath, { root, config, sessions, onSettin
   return json(res, 405, { error: 'Method not allowed' })
 }
 
-export function startServer(root, port, { config = { maxStorageGb: 0, keepDays: 0 }, onSettingsChanged } = {}, log = console.log) {
+export function startServer(root, port, { config = { maxStorageGb: 0, keepDays: 0 }, onSettingsChanged, onRestart, passkeys = new Passkeys() } = {}, log = console.log) {
   const sessions = new Sessions()
   const handle = async (req, res) => {
     let urlPath
@@ -137,7 +208,7 @@ export function startServer(root, port, { config = { maxStorageGb: 0, keepDays: 
     }
     if (urlPath.startsWith('/api/')) {
       try {
-        return await settingsApi(req, res, urlPath, { root, config, sessions, onSettingsChanged, log })
+        return await settingsApi(req, res, urlPath, { root, config, sessions, passkeys, onSettingsChanged, onRestart, log })
       } catch (e) {
         return json(res, 400, { error: e.message })
       }

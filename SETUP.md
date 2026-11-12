@@ -112,6 +112,28 @@ Tailscale links your own devices in a private network, so your iPhone can open t
 - Mac: if macOS asked "Do you want **node** to accept incoming connections?", choose **Allow**. Otherwise check System Settings → Network → Firewall.
 - Windows: if Windows Firewall asks about **Node.js**, tick **Private networks** and click **Allow**.
 
+## Face ID (https through Tailscale)
+Phones only allow Face ID on **https** pages, so the clips page needs a secure address. Tailscale gives it one for free, reachable only by your Tailscale devices.
+
+1. **Turn on HTTPS for your tailnet (once):** at login.tailscale.com → **DNS**, make sure **MagicDNS** is on, then click **Enable HTTPS**.
+2. **On the laptop**, in a Command Prompt:
+   ```
+   tailscale serve --bg 8080
+   ```
+   It prints the address, e.g. `https://doorbell-laptop.tail1234.ts.net`. If it asks you to allow Serve first, open the link it shows. `tailscale serve status` shows the address again later. It keeps working after restarts.
+3. **On your iPhone**, open that **https** address in Safari → **Settings** tab → unlock with your PIN → **Add Face ID for this device** → confirm with Face ID. Then **Share → Add to Home Screen** for this address.
+4. From now on, **Use Face ID** unlocks Settings and deleting. The PIN still works as a fallback. The **Face ID** card lists each device; **Remove** one if you lose it.
+
+Notes: Face ID is tied to the address you set it up on, so set it up on the https one. The laptop's Tailscale name appears in public certificate logs; choose a neutral name. The plain `http://…:8080` addresses keep working with the PIN.
+
+## Updating from your phone
+Clips page → **Settings** → **App updates** → **Check for updates** shows what's new on GitHub → **Update & restart**.
+- It only takes this repository's own newer commits (fast-forward), runs `npm install` and the tests, and **undoes the update if anything fails**.
+- The recorder then restarts by itself (about 30 seconds without recording). If the new version doesn't start properly, the laptop **goes back to the previous version automatically** and the page says so.
+- It refuses, and tells you why, when an update changes the Windows start script, or when app files were edited or committed on the laptop. Update those at the laptop: `git pull`, `npm install`, then `windows\start-at-boot.bat`.
+- Needs the folder to be a git checkout (see Updating later) and the recorder running from `windows\start-doorbell.bat` (the boot task does this). Each update is written to the log with who asked for it.
+- Keep your GitHub account safe with two-factor authentication: whoever can push to the repo decides what the laptop runs.
+
 ## Troubleshooting
 | Problem | What to do |
 |---|---|

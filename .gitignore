@@ -4,3 +4,4 @@ node_modules/
 recordings/
 logs/
 linux/doorbell.service
+data/

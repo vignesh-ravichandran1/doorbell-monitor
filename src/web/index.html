@@ -83,6 +83,16 @@ body.selecting main { padding-bottom: 90px; }
 #pinbox input { width: 100%; border: 1px solid var(--line); background: var(--bg); color: var(--fg); border-radius: 8px; padding: 9px 10px; font: inherit; font-size: 16px; }
 #pinbox .error { color: #dc2626; font-size: 13px; margin-top: 6px; }
 #pinbox .row { justify-content: flex-end; margin-top: 14px; }
+.faceid { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; margin-bottom: 12px; }
+.or { text-align: center; color: var(--muted); font-size: 13px; margin: 0 0 10px; }
+.keys { list-style: none; padding: 0; margin: 0 0 12px; }
+.keys li { display: flex; gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); font-size: 14px; }
+.keys li:first-child { border-top: 0; }
+.keys li span { flex: 1; }
+.keys li small { display: block; color: var(--muted); }
+.commits { margin: 8px 0 12px; padding-left: 18px; font-size: 14px; }
+.commits code { color: var(--muted); }
+.mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; white-space: pre-wrap; }
 .bar .title { flex: 1; min-width: 160px; font-size: 14px; }
 @media (max-width: 700px) {
   dialog { margin: auto 0; width: 100vw; }
@@ -171,8 +181,10 @@ body.selecting main { padding-bottom: 90px; }
 
   <section id="settings-view" class="panel" hidden>
     <form id="login" class="card-box" hidden>
-      <h3>Enter PIN</h3>
+      <h3>Unlock</h3>
       <p id="login-msg">Settings are protected by the PIN you set with <code>npm run setup</code>.</p>
+      <button type="button" class="btn faceid" id="faceid-login" hidden>Use Face ID</button>
+      <p class="or" id="faceid-or" hidden>or enter your PIN</p>
       <div class="field"><input type="password" id="pin" inputmode="numeric" autocomplete="current-password" placeholder="PIN" aria-label="PIN"></div>
       <div class="field error" id="login-err" hidden></div>
       <button class="btn" type="submit">Unlock</button>
@@ -262,6 +274,25 @@ body.selecting main { padding-bottom: 90px; }
         </div>
       </div>
 
+      <div class="card-box">
+        <h3>Face ID</h3>
+        <p>Unlock Settings and deleting with Face ID (or Touch ID / Windows Hello) instead of typing the PIN. The PIN keeps working too.</p>
+        <ul class="keys" id="keys"></ul>
+        <button type="button" class="btn secondary" id="add-faceid">Add Face ID for this device</button>
+        <p class="help" id="faceid-help" hidden></p>
+      </div>
+
+      <div class="card-box">
+        <h3>App updates</h3>
+        <p id="version">Version: …</p>
+        <div id="update-msg"></div>
+        <ol class="commits" id="commits" hidden></ol>
+        <div class="row">
+          <button type="button" class="btn secondary" id="check-update">Check for updates</button>
+          <button type="button" class="btn" id="apply-update" hidden>Update &amp; restart</button>
+        </div>
+      </div>
+
       <div class="actions">
         <button class="btn" type="submit" id="save">Save</button>
         <button class="btn secondary" type="button" id="logout">Lock</button>
@@ -292,8 +323,9 @@ body.selecting main { padding-bottom: 90px; }
 
 <dialog id="pinbox">
   <form id="pinform">
-    <h3>Enter PIN to delete</h3>
+    <h3>Unlock to delete</h3>
     <p id="pinmsg">Deleting clips needs the Settings PIN.</p>
+    <button type="button" class="btn faceid" id="faceid-pinbox" hidden>Use Face ID</button>
     <input type="password" id="pin2" inputmode="numeric" autocomplete="current-password" aria-label="PIN">
     <div class="error" id="pinerr" hidden></div>
     <div class="row"><button type="button" class="btn secondary" id="pincancel">Cancel</button><button type="submit" class="btn">Unlock</button></div>
@@ -487,6 +519,7 @@ function askPin(pinSet) {
     const done = (ok) => {
       $('pinform').onsubmit = null
       $('pincancel').onclick = null
+      $('faceid-pinbox').onclick = null
       $('pinbox').close()
       resolve(ok)
     }
@@ -499,8 +532,21 @@ function askPin(pinSet) {
       $('pinerr').textContent = d.error || 'Wrong PIN.'
       $('pinerr').hidden = false
     }
+    $('faceid-pinbox').hidden = true
+    $('faceid-pinbox').onclick = async () => {
+      try {
+        if (await faceIdUnlock()) done(true)
+      } catch (err) {
+        if (err.name === 'NotAllowedError') return // cancelled
+        $('pinerr').textContent = err.message
+        $('pinerr').hidden = false
+      }
+    }
     $('pinbox').showModal()
-    if (pinSet) $('pin2').focus()
+    faceIdAvailableHere().then((ok) => {
+      $('faceid-pinbox').hidden = !ok
+      if (pinSet && !ok) $('pin2').focus()
+    })
   })
 }
 
@@ -587,7 +633,11 @@ function showLogin(pinSet, error) {
   $('pin').disabled = !pinSet
   $('login-err').hidden = !error
   $('login-err').textContent = error || ''
-  if (pinSet) $('pin').focus()
+  faceIdAvailableHere().then((ok) => {
+    $('faceid-login').hidden = !ok
+    $('faceid-or').hidden = !ok
+    if (pinSet && !ok) $('pin').focus()
+  })
 }
 
 function fillSettings({ settings, fields, restart }) {
@@ -611,12 +661,174 @@ function showRestart(restart, saved) {
   msg.innerHTML = parts.join('')
 }
 
+// ---- Face ID (passkeys) ----
+const b64u = {
+  enc: (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''),
+  dec: (s) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (s.length % 4)) % 4)), (c) => c.charCodeAt(0)),
+}
+// Browsers allow Face ID only on https pages (or localhost).
+const passkeysPossible = () => window.isSecureContext && 'PublicKeyCredential' in window
+const deviceName = () => {
+  const ua = navigator.userAgent
+  const kind = /iPhone/.test(ua) ? 'iPhone' : /iPad/.test(ua) ? 'iPad' : /Android/.test(ua) ? 'Android'
+    : /Mac/.test(ua) ? 'Mac' : /Windows/.test(ua) ? 'Windows PC' : 'Device'
+  return `${kind}, added ${new Date().toLocaleDateString()}`
+}
+
+async function faceIdAvailableHere() {
+  if (!passkeysPossible()) return false
+  const { data: d } = await api('GET', `/api/auth/status?rp=${encodeURIComponent(location.hostname)}`)
+  return d.passkeys > 0
+}
+
+// Resolves true once unlocked with Face ID.
+async function faceIdUnlock() {
+  const { status, data: opts } = await api('POST', '/api/passkey/login-options', { rpID: location.hostname })
+  if (status !== 200) throw new Error(opts.error || 'Face ID is not available here.')
+  const cred = await navigator.credentials.get({ publicKey: {
+    ...opts,
+    challenge: b64u.dec(opts.challenge),
+    allowCredentials: (opts.allowCredentials || []).map((c) => ({ ...c, id: b64u.dec(c.id) })),
+  } })
+  const r = cred.response
+  const res = await api('POST', '/api/passkey/login', { response: {
+    id: cred.id, rawId: b64u.enc(cred.rawId), type: cred.type,
+    response: {
+      clientDataJSON: b64u.enc(r.clientDataJSON), authenticatorData: b64u.enc(r.authenticatorData),
+      signature: b64u.enc(r.signature), userHandle: r.userHandle ? b64u.enc(r.userHandle) : undefined,
+    },
+    clientExtensionResults: cred.getClientExtensionResults(), authenticatorAttachment: cred.authenticatorAttachment,
+  } })
+  if (res.status !== 200) throw new Error(res.data.error || 'Face ID failed.')
+  return true
+}
+
+async function addFaceId() {
+  const { status, data: opts } = await api('POST', '/api/passkey/register-options', { rpID: location.hostname })
+  if (status !== 200) throw new Error(opts.error || `Error ${status}`)
+  const cred = await navigator.credentials.create({ publicKey: {
+    ...opts,
+    challenge: b64u.dec(opts.challenge),
+    user: { ...opts.user, id: b64u.dec(opts.user.id) },
+    excludeCredentials: (opts.excludeCredentials || []).map((c) => ({ ...c, id: b64u.dec(c.id) })),
+  } })
+  const r = cred.response
+  const res = await api('POST', '/api/passkey/register', { name: deviceName(), response: {
+    id: cred.id, rawId: b64u.enc(cred.rawId), type: cred.type,
+    response: {
+      clientDataJSON: b64u.enc(r.clientDataJSON), attestationObject: b64u.enc(r.attestationObject),
+      transports: r.getTransports ? r.getTransports() : [],
+    },
+    clientExtensionResults: cred.getClientExtensionResults(), authenticatorAttachment: cred.authenticatorAttachment,
+  } })
+  if (res.status !== 200) throw new Error(res.data.error || 'Could not add Face ID.')
+  renderKeys(res.data.passkeys)
+}
+
+const esc = (t) => String(t).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
+function renderKeys(list) {
+  const here = list.filter((k) => k.rpID === location.hostname)
+  $('keys').innerHTML = list.length
+    ? list.map((k) => `<li><span>${esc(k.name)}<small>${esc(k.rpID)}${k.lastUsedAt ? ` · last used ${new Date(k.lastUsedAt).toLocaleDateString()}` : ' · not used yet'}</small></span>` +
+      `<button type="button" class="btn secondary" data-remove="${esc(k.id)}">Remove</button></li>`).join('')
+    : '<li><span>No devices yet.</span></li>'
+  const ok = passkeysPossible()
+  $('add-faceid').disabled = !ok
+  $('faceid-help').hidden = ok
+  if (!ok) $('faceid-help').innerHTML = `Face ID only works on a secure (https) address. You're on <code>${esc(location.origin)}</code>: open the https Tailscale address (see SETUP.md → Face ID) and add it there.`
+  $('add-faceid').textContent = here.length ? 'Add Face ID for another device' : 'Add Face ID for this device'
+}
+$('keys').addEventListener('click', async (e) => {
+  const id = e.target.closest('[data-remove]')?.dataset.remove
+  if (!id || !confirm('Remove Face ID for this device? It can still unlock with the PIN.')) return
+  const { data: d } = await api('POST', '/api/passkey/remove', { id })
+  renderKeys(d.passkeys || [])
+})
+$('add-faceid').addEventListener('click', async () => {
+  try {
+    await addFaceId()
+    $('save-msg').innerHTML = '<div class="notice ok">Face ID added. Next time, tap "Use Face ID" to unlock.</div>'
+  } catch (e) {
+    if (e.name !== 'NotAllowedError') $('save-msg').innerHTML = `<div class="notice err">${esc(e.message)}</div>`
+  }
+})
+$('faceid-login').addEventListener('click', async () => {
+  try {
+    await faceIdUnlock()
+    loadSettings()
+  } catch (e) {
+    if (e.name !== 'NotAllowedError') showLogin(true, e.message)
+  }
+})
+
+// ---- App updates ----
+const fmtVersion = (v) => v.commit ? `${v.commit} · ${esc(v.subject)} (${new Date(v.date).toLocaleDateString()})` : esc(v.error || 'unknown')
+
+async function loadUpdateStatus() {
+  const { status, data: d } = await api('GET', '/api/update/status')
+  if (status !== 200) return
+  $('version').innerHTML = `Version: ${fmtVersion(d.version)}`
+  if (d.rolledBack) $('update-msg').innerHTML = `<div class="notice warn">The update to ${esc(d.rolledBack.from)} didn't start properly, so the laptop went back to ${esc(d.rolledBack.to)} on ${new Date(d.rolledBack.at).toLocaleString()}.</div>`
+  return d
+}
+
+$('check-update').addEventListener('click', async () => {
+  $('check-update').disabled = true
+  $('update-msg').innerHTML = '<div class="notice">Checking GitHub…</div>'
+  const { status, data: d } = await api('POST', '/api/update/check')
+  $('check-update').disabled = false
+  if (status !== 200) { $('update-msg').innerHTML = `<div class="notice err">${esc(d.error || status)}</div>`; return }
+  $('commits').hidden = !d.commits.length
+  $('commits').innerHTML = d.commits.map((c) => `<li><code>${esc(c.hash)}</code> ${esc(c.subject)}</li>`).join('')
+  $('apply-update').hidden = !d.canUpdate
+  $('update-msg').innerHTML = d.canUpdate
+    ? `<div class="notice ok">${d.behind} update${d.behind === 1 ? '' : 's'} available:</div>`
+    : `<div class="notice ${d.behind ? 'warn' : 'ok'}">${esc(d.reason)}</div>`
+})
+
+$('apply-update').addEventListener('click', async () => {
+  if (!confirm('Install these updates and restart the recorder? Recording pauses for about 30 seconds. If anything goes wrong, it goes back to the current version.')) return
+  $('apply-update').disabled = $('check-update').disabled = true
+  $('update-msg').innerHTML = '<div class="notice">Updating: downloading, installing and testing. This can take a few minutes…</div>'
+  const before = (await loadUpdateStatus())?.version.commit
+  const { status, data: d } = await api('POST', '/api/update/apply')
+  if (status !== 200) {
+    $('apply-update').disabled = $('check-update').disabled = false
+    $('update-msg').innerHTML = `<div class="notice err">Not updated: <span class="mono">${esc(d.error || status)}</span></div>`
+    return
+  }
+  $('commits').hidden = true
+  $('apply-update').hidden = true
+  if (!d.restarting) {
+    $('check-update').disabled = false
+    $('update-msg').innerHTML = `<div class="notice warn">Updated to ${esc(d.to)}. Restart the recorder to run it (Ctrl+C, then npm start).</div>`
+    return
+  }
+  $('update-msg').innerHTML = `<div class="notice">Updated to ${esc(d.to)}. Restarting the recorder…</div>`
+  // Wait for the restarted recorder to answer with the new version.
+  for (let i = 0; i < 60; i++) {
+    await new Promise((r) => setTimeout(r, 3000))
+    const s = await api('GET', '/api/update/status').catch(() => null)
+    if (s?.status === 401) { showLogin(true, 'Updated and restarted. Unlock again to continue.'); return }
+    if (s?.status === 200 && s.data.version.commit && s.data.version.commit !== before) {
+      $('check-update').disabled = false
+      $('version').innerHTML = `Version: ${fmtVersion(s.data.version)}`
+      $('update-msg').innerHTML = '<div class="notice ok">Updated and running the new version.</div>'
+      return
+    }
+  }
+  $('check-update').disabled = false
+  $('update-msg').innerHTML = '<div class="notice err">The recorder hasn\'t come back yet. If it doesn\'t start, it goes back to the previous version on its own.</div>'
+})
+
 async function loadSettings() {
   const { status, data } = await api('GET', '/api/settings')
   if (status === 401) return showLogin(data.pinSet)
   $('login').hidden = true
   $('settings').hidden = false
   fillSettings(data)
+  api('GET', '/api/passkeys').then(({ data: d }) => renderKeys(d.passkeys || []))
+  loadUpdateStatus()
 }
 
 $('login').addEventListener('submit', async (e) => {

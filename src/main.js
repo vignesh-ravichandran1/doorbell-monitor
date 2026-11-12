@@ -13,6 +13,7 @@ import { APP_DIR, config, findFfmpeg, loadToken, saveToken } from './config.js'
 import { flushLog, startFileLog, trackLifecycle } from './lifecycle.js'
 import { startServer } from './server.js'
 import { prune } from './storage.js'
+import { markHealthy } from './updater.js'
 
 const log = (...args) => console.log(new Date().toLocaleString(), ...args)
 const debug = process.argv.includes('--debug') || process.env.DEBUG_LOG === '1'
@@ -81,6 +82,11 @@ async function main() {
       log(`settings changed from the web page: ${keys.join(', ')}`)
       housekeeping() // a smaller storage limit takes effect right away
     },
+    // After an update from the Settings page: exit so windows\start-doorbell.bat starts the new version.
+    onRestart: () => {
+      log('restarting to run the updated version')
+      flushLog().then(() => process.exit(0))
+    },
   }, log)
 
   const ffmpeg = await findFfmpeg()
@@ -145,6 +151,8 @@ async function main() {
   }
   setInterval(housekeeping, 3600_000)
   log('waiting for rings and motion (ring the doorbell to test)...')
+  // Up and connected to Ring for a minute: an update that brought us here is good to keep.
+  setTimeout(() => markHealthy(log), 60_000)
 }
 
 main().catch((e) => {
