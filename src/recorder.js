@@ -37,14 +37,18 @@ export async function record(camera, session, { ffmpeg, recordingsDir, maxClipSe
   // with kill(), which on Windows terminates it at once, so a normal MP4 never gets its index
   // written and won't play. A fragmented one is playable however ffmpeg ends (crash, power cut).
   // -flush_packets 1 writes each fragment to disk at once instead of keeping it in a buffer.
+  // -frag_duration: a fragment at least every 0.5 s, not only at keyframes (Ring's can be seconds
+  // apart), since whatever is after the last complete fragment is lost when ffmpeg is killed.
   const call = await camera.streamVideo({
-    output: ['-t', String(maxClipSeconds + 10), '-flush_packets', '1',
+    output: ['-t', String(maxClipSeconds + 10), '-flush_packets', '1', '-frag_duration', '500000',
       '-movflags', '+frag_keyframe+empty_moov+default_base_moof', clip],
   })
   session.start()
   let ended = false
   firstValueFrom(call.onCallEnded).then(() => { ended = true })
-  while (!ended && Date.now() < session.deadline) await sleep(500)
+  // On Windows the kill loses the unfinished last fragment, so record a moment longer.
+  const extraMs = process.platform === 'win32' ? 1000 : 0
+  while (!ended && Date.now() < session.deadline + extraMs) await sleep(250)
   call.stop()
   await waitForFinishedMp4(clip)
 

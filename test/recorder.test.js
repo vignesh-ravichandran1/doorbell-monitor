@@ -19,9 +19,11 @@ function fakeCamera() {
     async streamVideo({ output }) {
       const onCallEnded = new ReplaySubject(1)
       const ff = spawn(ffmpeg, ['-hide_banner', '-loglevel', 'error', '-re', '-f', 'lavfi', '-i', 'testsrc=size=640x360:rate=15',
-        '-c:v', 'libx264', '-preset', 'ultrafast', '-g', '15', ...output])
+        '-c:v', 'libx264', '-preset', 'ultrafast', '-g', '45', ...output]) // keyframe every 3 s, like Ring
       ff.on('exit', () => onCallEnded.next())
-      return { onCallEnded, stop: () => { onCallEnded.next(); ff.kill() } }
+      // Like ring-client-api on Windows: report 'ended' at once and kill ffmpeg outright, so it
+      // can't finish the file. The clip must still play and be (nearly) full length.
+      return { onCallEnded, stop: () => { onCallEnded.next(); ff.kill('SIGKILL') } }
     },
   }
 }
@@ -41,7 +43,7 @@ test('a ring during a motion clip extends it and makes it a ring clip', { timeou
   assert.match(path.basename(clip), /^\d{6}_ding_fake\.mp4$/)
   assert.ok(fs.existsSync(thumb), 'thumbnail made')
   const secs = duration(clip)
-  assert.ok(secs > 6.5 && secs < 8.5, `clip is ${secs}s, expected ~7.5s`)
+  assert.ok(secs > 6.5 && secs < 9, `clip is ${secs}s, expected ~7.5s (~8.5s on Windows)`)
   assert.deepEqual(fs.readdirSync(path.dirname(clip)).filter((f) => !f.endsWith('.jpg')), [path.basename(clip)], 'renamed, not copied; no temp file left')
   const head = fs.readFileSync(clip).subarray(0, 64 * 1024)
   assert.ok(head.includes('moov') && !fs.readFileSync(clip).includes('moof'), 'regular MP4 with its index at the front')

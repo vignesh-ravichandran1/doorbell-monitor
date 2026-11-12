@@ -3,7 +3,10 @@
 // goes last, on stderr, kept to a few lines.
 import { spawn } from 'node:child_process'
 
-const child = spawn(process.execPath, ['--test', '--test-reporter=tap'], { stdio: ['ignore', 'pipe', 'inherit'] })
+const child = spawn(process.execPath, ['--test', '--test-reporter=tap'], {
+  stdio: ['ignore', 'pipe', 'inherit'],
+  env: { ...process.env, DOORBELL_IGNORE_ENV_FILE: '1' }, // never this computer's .env
+})
 let out = ''
 child.stdout.on('data', (d) => {
   out += d

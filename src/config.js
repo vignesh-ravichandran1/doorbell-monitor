@@ -6,7 +6,8 @@ import { fileURLToPath } from 'node:url'
 export const APP_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
 export const envFile = path.join(APP_DIR, '.env')
-if (fs.existsSync(envFile)) process.loadEnvFile(envFile)
+// Tests set DOORBELL_IGNORE_ENV_FILE so this computer's settings can't change their results.
+if (fs.existsSync(envFile) && !process.env.DOORBELL_IGNORE_ENV_FILE) process.loadEnvFile(envFile)
 
 const env = (name, fallback) => process.env[name] ?? fallback
 const list = (name, fallback) =>
