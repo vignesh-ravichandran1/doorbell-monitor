@@ -76,6 +76,19 @@ body.selecting .card .check { display: block; }
 .selbar button.danger { border-color: #b91c1c; }
 .selbar button:disabled { opacity: .45; cursor: default; }
 body.selecting main { padding-bottom: 90px; }
+/* Swipe to select: a sideways drag starts selecting, up/down still scrolls the page */
+body.selecting .card { touch-action: pan-y; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+body.selecting .card img { pointer-events: none; -webkit-user-drag: none; }
+h2 .daysel { display: none; margin-left: auto; border: 0; background: none; color: var(--accent); font: inherit; font-weight: 600; font-size: 14px; padding: 4px 0 4px 12px; cursor: pointer; }
+body.selecting h2 .daysel { display: inline; }
+.daysel, .card { -webkit-tap-highlight-color: transparent; }
+@media (max-width: 700px) {
+  /* One row on phones: the Delete button already shows the count. */
+  .selbar { flex-wrap: nowrap; gap: 6px; }
+  .selbar span { display: none; }
+  .selbar button { flex: 1; padding: 10px 4px; white-space: nowrap; }
+}
+h2 { align-items: baseline; }
 #pinbox { border: 0; border-radius: 12px; padding: 20px; width: min(340px, 92vw); background: var(--surface); color: var(--fg); }
 #pinbox::backdrop { background: rgba(0,0,0,.5); }
 #pinbox h3 { margin: 0 0 6px; }
@@ -430,17 +443,19 @@ function renderList() {
       lastDay = c.day
       const n = shown.filter((x) => x.day === c.day).length
       const h = document.createElement('h2')
-      h.innerHTML = `${dayTitle(c.day)} <span>· ${n}</span>`
+      h.innerHTML = `${dayTitle(c.day)} <span>· ${n}</span><button class="daysel" data-day="${c.day}"></button>`
       grid = document.createElement('div')
       grid.className = 'grid'
       list.append(h, grid)
     }
     const card = document.createElement('button')
     card.className = 'card'
+    card.dataset.index = i
     card.innerHTML = `<div class="thumb">${c.thumb ? `<img loading="lazy" alt="" src="${c.thumb}">` : '<div class="none">No preview</div>'}` +
       `<span class="badge ${c.event}">${label[c.event] || c.event}</span><span class="check">✓</span></div><div class="meta">${fmtTime(c.time)}</div>`
     card.classList.toggle('selected', selected.has(c.url))
     card.addEventListener('click', () => {
+      if (swipe.justEnded) return // the end of a swipe, not a tap
       if (!selecting) return openClip(i)
       if (selected.has(c.url)) selected.delete(c.url)
       else selected.add(c.url)
@@ -495,9 +510,121 @@ function updateSelbar() {
   $('sel-delete').disabled = selected.size === 0
   $('sel-delete').textContent = selected.size ? `Delete ${selected.size}` : 'Delete'
   $('sel-all').textContent = `Select all ${shown.length}`
+  for (const b of document.querySelectorAll('.daysel')) {
+    const day = shown.filter((c) => c.day === b.dataset.day)
+    b.textContent = day.length && day.every((c) => selected.has(c.url)) ? 'Deselect' : 'Select all'
+  }
 }
 
+// Repaint ticks without rebuilding the list (keeps scroll position during a swipe).
+function paintSelection() {
+  for (const card of document.querySelectorAll('.card')) card.classList.toggle('selected', selected.has(shown[card.dataset.index]?.url))
+  updateSelbar()
+}
+
+$('list').addEventListener('click', (e) => {
+  const b = e.target.closest('.daysel')
+  if (!b) return
+  const day = shown.filter((c) => c.day === b.dataset.day)
+  const all = day.every((c) => selected.has(c.url))
+  for (const c of day) all ? selected.delete(c.url) : selected.add(c.url)
+  paintSelection()
+})
+
+// ---- Swipe to select, like iOS Photos ----
+// Press on a clip and move sideways (or drag with a mouse): every clip from there to the finger
+// gets the opposite state of the first one. Near the top/bottom edge the page scrolls by itself.
+const swipe = { active: false, pending: null, start: -1, mode: true, base: null, x: 0, y: 0, raf: 0, justEnded: false }
+
+// The clip under the finger, or the nearest one when it's over a gap, a heading or the bar.
+function cardAt(x, y) {
+  const hit = document.elementFromPoint(x, y)?.closest('.card')
+  if (hit) return hit
+  let best = null
+  let bestDist = Infinity
+  const bottom = window.innerHeight
+  for (const card of document.querySelectorAll('.card')) {
+    const r = card.getBoundingClientRect()
+    if (r.bottom < -200 || r.top > bottom + 200) continue // far off screen
+    const dx = Math.max(r.left - x, 0, x - r.right)
+    const dy = Math.max(r.top - y, 0, y - r.bottom)
+    const dist = dx * dx + dy * dy
+    if (dist < bestDist) { bestDist = dist; best = card }
+  }
+  return best
+}
+
+function swipeApply() {
+  const card = cardAt(swipe.x, Math.min(swipe.y, window.innerHeight - ($('selbar').offsetHeight || 0) - 1))
+  if (!card) return
+  const end = Number(card.dataset.index)
+  const [lo, hi] = swipe.start < end ? [swipe.start, end] : [end, swipe.start]
+  selected.clear()
+  for (const url of swipe.base) selected.add(url)
+  for (let i = lo; i <= hi; i++) swipe.mode ? selected.add(shown[i].url) : selected.delete(shown[i].url)
+  paintSelection()
+}
+
+function swipeScroll() {
+  if (!swipe.active) return
+  const edge = 90
+  const bottom = window.innerHeight - ($('selbar').offsetHeight || 0)
+  let dy = 0
+  if (swipe.y < edge) dy = -Math.ceil((edge - swipe.y) / 6)
+  else if (swipe.y > bottom - edge) dy = Math.ceil((swipe.y - (bottom - edge)) / 6)
+  if (dy) {
+    window.scrollBy(0, dy)
+    swipeApply()
+  }
+  swipe.raf = requestAnimationFrame(swipeScroll)
+}
+
+function swipeBegin() {
+  swipe.active = true
+  swipe.base = new Set(selected)
+  swipe.mode = !selected.has(shown[swipe.start].url)
+  swipeApply()
+  swipe.raf = requestAnimationFrame(swipeScroll)
+}
+
+function swipeEnd() {
+  if (swipe.active) {
+    swipe.justEnded = true
+    setTimeout(() => { swipe.justEnded = false }, 50)
+  }
+  swipe.active = false
+  swipe.pending = null
+  cancelAnimationFrame(swipe.raf)
+}
+
+$('list').addEventListener('pointerdown', (e) => {
+  const card = e.target.closest('.card')
+  if (!selecting || !card || (e.pointerType === 'mouse' && e.button !== 0)) return
+  swipe.pending = { x: e.clientX, y: e.clientY, touch: e.pointerType !== 'mouse' }
+  swipe.start = Number(card.dataset.index)
+  swipe.x = e.clientX
+  swipe.y = e.clientY
+})
+
+window.addEventListener('pointermove', (e) => {
+  if (!swipe.pending && !swipe.active) return
+  swipe.x = e.clientX
+  swipe.y = e.clientY
+  if (swipe.active) return swipeApply()
+  const dx = Math.abs(e.clientX - swipe.pending.x)
+  const dy = Math.abs(e.clientY - swipe.pending.y)
+  if (dx < 8 && dy < 8) return
+  // Touch: only a sideways start selects; up/down is left to the page to scroll.
+  if (swipe.pending.touch && dy > dx) { swipe.pending = null; return }
+  swipeBegin()
+})
+window.addEventListener('pointerup', swipeEnd)
+window.addEventListener('pointercancel', swipeEnd)
+// Once selecting by swipe, keep the finger from scrolling the page (we scroll at the edges).
+window.addEventListener('touchmove', (e) => { if (swipe.active) e.preventDefault() }, { passive: false })
+
 function setSelecting(on) {
+  swipeEnd()
   selecting = on
   selected.clear()
   document.body.classList.toggle('selecting', on)
