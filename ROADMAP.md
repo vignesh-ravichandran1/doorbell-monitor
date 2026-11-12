@@ -56,6 +56,22 @@ Purging is size-first: the oldest clips go when `MAX_STORAGE_GB` (or `MIN_FREE_G
 - **With detection** (see Next release): protect clips tagged person (optionally vehicle).
 - Protected clips count toward their own cap so they can't fill the disk.
 
+## Pre-roll: seconds *before* the motion or ring
+Today the laptop only opens the doorbell's live view after Ring reports an event, so clips start
+3–8 s late and never show what happened just before. (After the event is already covered: clip
+lengths, and extension while activity continues.)
+- **How:** keep the live view open all the time and hold the last ~10 s in a rolling buffer
+  (memory or a few small temp segments, constantly overwritten, so no extra disk use). On an
+  event, the clip starts with the buffer, then continues as now.
+- **Setting:** "Seconds before the event" (e.g. 10; 0 = off, today's behaviour), live in Settings.
+  Wired doorbells only.
+- **Costs:** ~1–2 Mbps nonstop (15–20 GB/day of downloads), steady light CPU, a short gap
+  without pre-roll whenever Ring ends the live view and it reconnects.
+- **Test first (2–3 h, hidden mode):** how long Ring keeps a live view open and the reconnect
+  gap; whether ring/motion events still arrive and the Ring app's live view still works while
+  streaming; data and CPU per hour; whether Ring objects to nonstop streaming.
+- First step towards the continuous-recording option below, which reuses the same stream.
+
 ## Continuous recording, middle ground (rolling 24 h buffer + events)
 Keep the live view open and write 5–10 minute segments; the last 24 h are kept as a rolling
 buffer, event clips are kept long-term in their own pool.
