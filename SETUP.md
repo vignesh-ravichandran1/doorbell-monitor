@@ -131,7 +131,7 @@ Clips page → **Settings** → **App updates** → **Check for updates** shows 
 - It only takes this repository's own newer commits (fast-forward), runs `npm install` and the tests, and **undoes the update if anything fails**.
 - The recorder then restarts by itself (about 30 seconds without recording). If the new version doesn't start properly, the laptop **goes back to the previous version automatically** and the page says so.
 - It refuses, and tells you why, when an update changes the Windows start script, or when app files were edited or committed on the laptop. Update those at the laptop: `git pull`, `npm install`, then `windows\start-at-boot.bat`.
-- Needs the folder to be a git checkout (see Updating later) and the recorder running from `windows\start-doorbell.bat` (the boot task does this). Each update is written to the log with who asked for it.
+- Needs the folder to be a git checkout (see Updating later) and the recorder running from `windows\start-doorbell.bat` (the boot task does this). Each update is written to the log with who asked for it; if one fails or is undone, `logsecorder-*.log` says why.
 - Keep your GitHub account safe with two-factor authentication: whoever can push to the repo decides what the laptop runs.
 
 ## Troubleshooting
