@@ -38,6 +38,7 @@ Open `http://localhost:8080` on the recording computer, or `http://<its IP>:8080
 - **Face ID:** unlock Settings and deleting with Face ID instead of the PIN, on the https Tailscale address. See [SETUP.md → Face ID](SETUP.md#face-id-https-through-tailscale).
 - **Updates from your phone:** Settings → App updates. It checks, installs, tests and restarts, and rolls back if anything fails. See [SETUP.md → Updating from your phone](SETUP.md#updating-from-your-phone).
 - **Delete clips:** tap **Select**, then tick clips, **slide sideways across clips and drag up or down** to select many at once like iOS Photos (the page scrolls when you reach the edge), tap **Select all** next to a day for the whole day, or **Select all** at the bottom for everything the filters show. Then **Delete**. Or tap **Delete** while watching a clip. Deleting needs the Settings PIN and can't be undone. A clip that's still recording is skipped.
+- **Landscape on a phone, even with rotation lock on:** in the player tap **Landscape**, then turn the phone sideways. The video fills the screen; **Flip** turns it the other way, **Exit** goes back.
 - **Storage meter:** how much of your space is used and how many clips you have.
 - **Settings:** see below.
 - **iPhone:** in Safari, **Share → Add to Home Screen** to open it like an app.
