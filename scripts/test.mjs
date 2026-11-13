@@ -3,9 +3,16 @@
 // goes last, on stderr, kept to a few lines.
 import { spawn } from 'node:child_process'
 
+// Never this computer's settings: not the .env file, and not values already in the
+// environment (an update from the Settings page runs this from the recorder, which loaded .env).
+process.env.DOORBELL_IGNORE_ENV_FILE = '1'
+const { ENV_KEYS } = await import('../src/config.js')
+const env = { ...process.env }
+for (const key of ENV_KEYS) delete env[key]
+
 const child = spawn(process.execPath, ['--test', '--test-reporter=tap'], {
   stdio: ['ignore', 'pipe', 'inherit'],
-  env: { ...process.env, DOORBELL_IGNORE_ENV_FILE: '1' }, // never this computer's .env
+  env,
 })
 let out = ''
 child.stdout.on('data', (d) => {

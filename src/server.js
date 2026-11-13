@@ -169,7 +169,7 @@ async function settingsApi(req, res, urlPath, { root, config, sessions, passkeys
       if (restartsItself) setTimeout(() => onRestart?.(), 1000) // let the response reach the phone first
       return
     } catch (e) {
-      log(`update failed: ${e.message.split('\n')[0]}`)
+      log(`update failed: ${e.message}`) // all of it: the failing tests are on the lines after the first
       return json(res, 400, { error: e.message })
     }
   }

@@ -6,6 +6,15 @@ import { fileURLToPath } from 'node:url'
 export const APP_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
 export const envFile = path.join(APP_DIR, '.env')
+
+// Every setting the app reads from the environment (.env or set by hand). npm test removes
+// them, so tests behave the same when run by the recorder, which has already loaded .env.
+export const ENV_KEYS = [
+  'RING_REFRESH_TOKEN', 'RECORDINGS_PATH', 'RECORD_SECONDS', 'RECORD_SECONDS_DING', 'RECORD_SECONDS_MOTION',
+  'MAX_CLIP_SECONDS', 'RECORD_ON', 'NOTIFY_ON', 'MOTION_COOLDOWN_SECONDS', 'KEEP_DAYS', 'MAX_STORAGE_GB',
+  'MIN_FREE_GB', 'WEB_PORT', 'WEB_BASE_URL', 'NTFY_URL', 'NTFY_TOPIC', 'NTFY_TOKEN', 'SETTINGS_PIN_HASH',
+  'DEBUG_LOG',
+]
 // Tests set DOORBELL_IGNORE_ENV_FILE so this computer's settings can't change their results.
 if (fs.existsSync(envFile) && !process.env.DOORBELL_IGNORE_ENV_FILE) process.loadEnvFile(envFile)
 
