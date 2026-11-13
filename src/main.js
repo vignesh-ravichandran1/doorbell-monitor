@@ -38,7 +38,7 @@ if (await portInUse(config.webPort)) {
   await flushLog()
   process.exit(3)
 }
-trackLifecycle(logsDir, log, { status: pushStatus })
+const lifecycle = trackLifecycle(logsDir, log, { status: pushStatus })
 if (debug) log('debug logging on')
 
 async function notify(title, message, { priority = 'default', image, click } = {}) {
@@ -83,10 +83,8 @@ async function main() {
       housekeeping() // a smaller storage limit takes effect right away
     },
     // After an update from the Settings page: exit so windows\start-doorbell.bat starts the new version.
-    onRestart: () => {
-      log('restarting to run the updated version')
-      flushLog().then(() => process.exit(0))
-    },
+    // A recorded stop, so the next start logs it as a restart rather than a crash.
+    onRestart: () => lifecycle.stop('restarting to run the updated version'),
   }, log)
 
   const ffmpeg = await findFfmpeg()
