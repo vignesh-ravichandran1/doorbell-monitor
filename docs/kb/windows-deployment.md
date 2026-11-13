@@ -22,5 +22,7 @@
   `Start-Process powershell -Verb RunAs -ArgumentList '-File',...` (owner approves UAC).
   SYSTEM has: TEMP=C:\WINDOWS\TEMP, npm cache in systemprofile, node + git on PATH, no ffmpeg on
   PATH (the app uses the bundled one).
-- Restarting the recorder needs elevation or a phone update; code changes on disk only take
-  effect at the next restart.
+- Code changes on disk only take effect at the next restart. **Restart** (≈15 s gap): an elevated
+  .ps1 (launched with RunAs as above) that writes `logs\stop-request`, waits until
+  `(Get-ScheduledTask 'Doorbell recorder').State` is no longer Running (clean exit 3), then
+  `Start-ScheduledTask 'Doorbell recorder'`. Check the log for "recorder started" + "waiting for rings".
