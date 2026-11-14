@@ -102,5 +102,11 @@ clip is saved, make a 720p "phone" copy in the background (about a third of the 
 when not on the home network, with a toggle for full quality. Costs ~30% more disk and some CPU.
 First check the cheap fix: `tailscale ping` shows "via DERP" → enable UPnP on the router.
 
+## Clips page with thousands of clips: load in chunks
+Building every clip tile at once takes ~0.5 s for 6,000 clips on a phone (measured 2026-11-14).
+Render the newest ~200 and add more while scrolling (or per day, collapsed). Select all, the day
+buttons and swipe-select must keep working on clips not yet rendered. Tried and rejected: CSS
+`content-visibility: auto` on the day grids, only 15-20% faster and the page height shifts.
+
 ## Other
 - Daily summary notification (number of rings and motion events, thumbnails).
