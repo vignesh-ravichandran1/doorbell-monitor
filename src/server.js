@@ -1,6 +1,7 @@
 // Serves the clips page, its data (/api/clips), and the clip files themselves. Supports
 // Range requests so videos can seek (iPhone Safari refuses to play mp4 without it).
 import crypto from 'node:crypto'
+import { promisify } from 'node:util'
 import fs from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
@@ -12,6 +13,7 @@ import { clipSummary, deleteClips, setKept } from './storage.js'
 import * as updater from './updater.js'
 import { report as healthReport } from './health.js'
 
+const gzip = promisify(zlib.gzip)
 const PAGE = path.join(path.dirname(fileURLToPath(import.meta.url)), 'web', 'index.html')
 const TYPES = { '.mp4': 'video/mp4', '.jpg': 'image/jpeg' }
 
@@ -219,6 +221,10 @@ export function startServer(root, port, { config = { maxStorageGb: 0, keepDays: 
       const etag = `"${crypto.createHash('sha1').update(body).digest('base64url')}"`
       const headers = { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache', ETag: etag }
       if (req.headers['if-none-match'] === etag) return res.writeHead(304, headers).end()
+      // The list is repetitive text: gzip makes it about a tenth of the size.
+      if (/\bgzip\b/.test(req.headers['accept-encoding'] || '')) {
+        return res.writeHead(200, { ...headers, 'Content-Encoding': 'gzip', Vary: 'Accept-Encoding' }).end(await gzip(body))
+      }
       return res.writeHead(200, headers).end(body)
     }
     if (urlPath.startsWith('/api/')) {
