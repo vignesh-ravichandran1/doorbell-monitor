@@ -36,6 +36,9 @@ const freeBytes = (root) => {
 }
 
 const isRing = (clip) => path.basename(clip).split('_')[1] === 'ding'
+// A clip marked "Keep" on the page has an empty <clip>.keep file next to it; it is never purged.
+const keepFile = (clip) => clip.replace(/\.mp4$/, '.keep')
+const isKept = (clip) => fs.existsSync(keepFile(clip))
 
 // Every file that belongs to a clip (video, thumbnail, tags); returns the bytes freed.
 function removeClip(clip) {
@@ -64,14 +67,15 @@ export function prune(root, { keepDays, maxStorageGb, minFreeGb, protectRings = 
     const removed = new Map() // day -> count, for one log line per day
     for (const clip of listClips(root)) {
       const day = path.basename(path.dirname(clip))
-      if ((today - Date.parse(day)) / 86400000 <= keepDays || (protectRings && isRing(clip))) continue
+      if ((today - Date.parse(day)) / 86400000 <= keepDays || (protectRings && isRing(clip)) || isKept(clip)) continue
       removeClip(clip)
       removed.set(day, (removed.get(day) || 0) + 1)
     }
     for (const [day, n] of removed) log(`pruning ${n} clip(s) from ${day} (older than ${keepDays} days)`)
   }
 
-  const clips = listClips(root).map((clip) => ({ clip, ring: isRing(clip) })) // oldest first
+  // Kept clips are never candidates, so only you can delete them (from the page).
+  const clips = listClips(root).filter((clip) => !isKept(clip)).map((clip) => ({ clip, ring: isRing(clip) })) // oldest first
   const clipBytes = (clip) => fs.readdirSync(path.dirname(clip))
     .filter((f) => f.startsWith(`${path.basename(clip, '.mp4')}.`))
     .reduce((s, f) => s + sizeOf(path.join(path.dirname(clip), f)), 0)
@@ -135,6 +139,7 @@ export async function clipSummary(root) {
       // ?v= changes when the thumbnail is re-made, since browsers keep thumbnails for a week.
       thumb: hasThumb ? `/${day}/${encodeURIComponent(path.basename(thumb))}?v=${Math.floor(sizes.get(thumb).mtimeMs).toString(36)}` : null,
       size,
+      kept: sizes.has(keepFile(clip)),
     }
   })
   // Newest first by date and time only; ring vs motion never affects the order.
@@ -143,6 +148,22 @@ export async function clipSummary(root) {
 }
 
 const CLIP_NAME_RE = /^\d{6}_[a-z]+_[\w-]+\.mp4$/
+
+/** Mark or unmark a clip (by its page URL) as kept. Returns false if it isn't a real clip. */
+export async function setKept(root, url, kept) {
+  let day, name
+  try {
+    [, day, name] = decodeURIComponent(String(url).split('?')[0]).split('/')
+  } catch {
+    return false
+  }
+  if (!DAY_RE.test(day || '') || !CLIP_NAME_RE.test(name || '')) return false
+  const clip = path.join(root, day, name)
+  if (!(await fs.promises.stat(clip).catch(() => null))) return false
+  if (kept) await fs.promises.writeFile(keepFile(clip), '')
+  else await fs.promises.rm(keepFile(clip), { force: true })
+  return true
+}
 
 /**
  * Delete clips by their page URLs (/<day>/<name>.mp4), with every file sharing the clip's

@@ -87,7 +87,7 @@ dialog.landscape video { flex: 1; min-height: 0; max-height: none; height: auto;
 dialog.landscape .bar { flex-wrap: nowrap; padding: 6px max(10px, env(safe-area-inset-top)); }
 dialog.landscape .bar .title { flex-basis: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
 dialog.landscape .bar button, dialog.landscape .bar a { flex: 0 0 auto; padding: 8px 12px; }
-dialog.landscape #download, dialog.landscape #vdelete { display: none; }
+dialog.landscape #download, dialog.landscape #vdelete, dialog.landscape #vkeep { display: none; }
 .bar { display: flex; gap: 8px; align-items: center; padding: 10px 12px; flex-wrap: wrap; }
 .bar .danger, .selbar .danger { background: #b91c1c; color: #fff; }
 
@@ -356,6 +356,7 @@ h2 { align-items: baseline; }
       <button id="flip" title="Turn it the other way">Flip</button>
       <button id="rotate" title="Turn the video sideways to watch it in landscape">Landscape</button>
       <a id="download" download>Download</a>
+      <button id="vkeep" title="Kept clips are never deleted automatically">☆ Keep</button>
       <button id="vdelete" class="danger">Delete</button>
       <button id="close">Close</button>
     </div>
@@ -372,8 +373,8 @@ h2 { align-items: baseline; }
 
 <dialog id="pinbox">
   <form id="pinform">
-    <h3>Unlock to delete</h3>
-    <p id="pinmsg">Deleting clips needs the Settings PIN.</p>
+    <h3>Unlock</h3>
+    <p id="pinmsg">Keeping or deleting clips needs the Settings PIN.</p>
     <button type="button" class="btn faceid" id="faceid-pinbox" hidden>Use Face ID</button>
     <input type="password" id="pin2" inputmode="numeric" autocomplete="current-password" aria-label="PIN">
     <div class="error" id="pinerr" hidden></div>
@@ -488,7 +489,7 @@ function renderList() {
     card.className = 'card'
     card.dataset.index = i
     card.innerHTML = `<div class="thumb">${c.thumb ? `<img loading="lazy" alt="" src="${c.thumb}">` : '<div class="none">No preview</div>'}` +
-      `<span class="badge ${c.event}">${label[c.event] || c.event}</span><span class="check">✓</span></div><div class="meta">${fmtTime(c.time)}</div>`
+      `<span class="badge ${c.event}">${label[c.event] || c.event}</span><span class="check">✓</span></div><div class="meta">${fmtTime(c.time)}${c.kept ? ' <span title="Kept">★</span>' : ''}</div>`
     card.classList.toggle('selected', selected.has(c.url))
     card.addEventListener('click', () => {
       if (swipe.justEnded) return // the end of a swipe, not a tap
@@ -507,6 +508,7 @@ function render() { renderFilters(); renderList(); writeHash(); if (selecting) u
 function openClip(i) {
   current = i
   const c = shown[i]
+  $('vkeep').textContent = c.kept ? '★ Kept' : '☆ Keep'
   $('video').src = c.url
   $('vtitle').textContent = `${label[c.event] || c.event} · ${dayTitle(c.day)}, ${fmtTime(c.time)}`
   $('download').href = c.url
@@ -688,7 +690,7 @@ function setSelecting(on) {
 // Shows the PIN box; resolves true once unlocked, false if cancelled.
 function askPin(pinSet) {
   return new Promise((resolve) => {
-    $('pinmsg').innerHTML = pinSet ? 'Deleting clips needs the Settings PIN.'
+    $('pinmsg').innerHTML = pinSet ? 'Keeping or deleting clips needs the Settings PIN.'
       : 'No PIN is set yet. On the recording computer, run <code>npm run pin</code> first.'
     $('pin2').disabled = !pinSet
     $('pinerr').hidden = true
@@ -756,6 +758,18 @@ $('sel-none').addEventListener('click', () => { selected.clear(); renderList(); 
 $('sel-all').addEventListener('click', () => { for (const c of shown) selected.add(c.url); renderList(); updateSelbar() })
 $('sel-delete').addEventListener('click', async () => {
   if (await deleteUrls([...selected]) && !data.clips.length) setSelecting(false)
+})
+$('vkeep').addEventListener('click', async () => {
+  const c = shown[current]
+  if (!c) return
+  let res = await api('POST', '/api/clips/keep', { url: c.url, kept: !c.kept })
+  if (res.status === 401) {
+    if (!(await askPin(res.data.pinSet))) return
+    res = await api('POST', '/api/clips/keep', { url: c.url, kept: !c.kept })
+  }
+  if (res.status !== 200) return alert(`Couldn't change it: ${res.data.error || res.status}`)
+  c.kept = res.data.kept
+  $('vkeep').textContent = c.kept ? '★ Kept' : '☆ Keep'
 })
 $('vdelete').addEventListener('click', async () => {
   const c = shown[current]

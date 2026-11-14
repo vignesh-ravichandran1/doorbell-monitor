@@ -51,8 +51,8 @@ skip blurry frames. `npm run rethumb` covers old clips. Ideas to improve it:
 Purging is size-first: the oldest clips go when `MAX_STORAGE_GB` (or `MIN_FREE_GB`) is reached;
 `KEEP_DAYS` is optional and off by default. Significant clips should be kept no matter what.
 
-- **"Keep" button** on the clips page that moves a clip into a `keep/` folder the purger never
-  touches.
+- **Done (2026-11-14):** a Keep button in the player; kept clips (`<clip>.keep`) are never purged.
+  Still open: kept clips don't have their own cap, so keeping a lot can fill the space.
 - **With detection** (see Next release): protect clips tagged person (optionally vehicle).
 - Protected clips count toward their own cap so they can't fill the disk.
 

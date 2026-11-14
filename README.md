@@ -39,6 +39,7 @@ Open `http://localhost:8080` on the recording computer, or `http://<its IP>:8080
 - **Updates from your phone:** Settings → App updates. It checks, installs, tests and restarts, and rolls back if anything fails. See [SETUP.md → Updating from your phone](SETUP.md#updating-from-your-phone).
 - **Delete clips:** tap **Select**, then tick clips, **slide sideways across clips and drag up or down** to select many at once like iOS Photos (the page scrolls when you reach the edge), tap **Select all** next to a day for the whole day, or **Select all** at the bottom for everything the filters show. Then **Delete**. Or tap **Delete** while watching a clip. Deleting needs the Settings PIN and can't be undone. A clip that's still recording is skipped.
 - **Landscape on a phone, even with rotation lock on:** in the player tap **Landscape**, then turn the phone sideways. The video fills the screen; **Flip** turns it the other way, **Exit** goes back.
+- **Keep a clip forever:** in the player tap **☆ Keep** (needs the PIN or Face ID). Kept clips show a ★ and are never deleted automatically; only you can delete them. Tap **★ Kept** to undo.
 - **Storage meter:** how much of your space is used and how many clips you have.
 - **Recorder status** under the meter: 🟢 recording and connected to Ring, 🟠 starting up, 🔴 a problem in plain English (e.g. Ring events not arriving, the last recording failed, recorder unreachable). Tap it for details: running since, Ring event connection, last event, last clip, last error.
 - **Settings:** see below.

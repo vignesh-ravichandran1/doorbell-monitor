@@ -7,7 +7,7 @@ import zlib from 'node:zlib'
 import { fileURLToPath } from 'node:url'
 import { FIELDS, Sessions, applySettings, currentSettings, pendingRestart, storedPinHash, validateSettings } from './settings.js'
 import { Passkeys } from './passkeys.js'
-import { clipSummary, deleteClips } from './storage.js'
+import { clipSummary, deleteClips, setKept } from './storage.js'
 import * as updater from './updater.js'
 import { report as healthReport } from './health.js'
 
@@ -121,6 +121,12 @@ async function settingsApi(req, res, urlPath, { root, config, sessions, passkeys
   if (urlPath === '/api/logout' && req.method === 'POST') {
     sessions.logout(token)
     return json(res, 200, { ok: true }, { 'Set-Cookie': `${SESSION_COOKIE}=; Path=/; Max-Age=0` })
+  }
+  if (urlPath === '/api/clips/keep' && req.method === 'POST') {
+    if (!sessions.valid(token)) return json(res, 401, { error: 'login', pinSet: Boolean(storedPinHash()) })
+    const { url, kept } = await readJson(req)
+    if (!(await setKept(root, url, Boolean(kept)))) return json(res, 400, { error: 'Not a clip' })
+    return json(res, 200, { kept: Boolean(kept) })
   }
   if (urlPath === '/api/clips/delete' && req.method === 'POST') {
     // Deleting is permanent, so it needs the same unlock as Settings.

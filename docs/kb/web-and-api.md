@@ -13,7 +13,7 @@ LAN (e.g. 192.168.x.x) have no Tailscale user.
 | `POST /api/login` | PIN | sets `doorbell_session` cookie |
 | `/api/auth/status`, `/api/logout` | — | |
 | `/api/passkey/login-options`, `/api/passkey/login` | none | Face ID unlock |
-| `/api/settings`, `/api/clips/delete` | session | |
+| `/api/settings`, `/api/clips/delete`, `/api/clips/keep` | session | keep = empty `<clip>.keep` file; `prune` skips kept clips |
 | `/api/passkeys`, `/api/passkey/register(-options)`, `/api/passkey/remove` | session | |
 | `/api/update/status`, `check`, `apply` | session | see updates.md |
 

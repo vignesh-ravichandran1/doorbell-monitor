@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { test } from 'node:test'
-import { clipPath, clipSummary, prune, deleteClips } from '../src/storage.js'
+import { clipPath, clipSummary, prune, deleteClips, setKept } from '../src/storage.js'
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'doorbell-'))
 const quiet = () => {}
@@ -163,4 +163,20 @@ test('disk almost full still deletes, motion clips first', () => {
   prune(root, { keepDays: 0, maxStorageGb: 0, minFreeGb: 5, protectRings: true, now: new Date(2026, 1, 1), getFree: () => frees.shift(), log: quiet })
   assert.ok(fs.existsSync(ring))
   assert.ok(!fs.existsSync(motion))
+})
+
+test('kept clips are never purged, by cap, days or a full disk; unkeeping makes them purgeable', async () => {
+  const root = tmp()
+  const kept = makeClip(root, '2026-01-01', '080000_motion_a.mp4', 1000)
+  const other = makeClip(root, '2026-01-30', '080000_motion_a.mp4', 1000)
+  assert.equal(await setKept(root, '/2026-01-01/080000_motion_a.mp4', true), true)
+  assert.equal(await setKept(root, '/../secret.mp4', true), false)
+  assert.equal((await clipSummary(root)).clips.find((c) => c.day === '2026-01-01').kept, true)
+  const frees = [0, 0, 0]
+  prune(root, { keepDays: 5, maxStorageGb: 100 / 1024 ** 3, minFreeGb: 5, now: new Date(2026, 1, 1), getFree: () => frees.shift() ?? 0, log: quiet })
+  assert.ok(fs.existsSync(kept), 'kept clip survives')
+  assert.ok(!fs.existsSync(other))
+  await setKept(root, '/2026-01-01/080000_motion_a.mp4', false)
+  prune(root, { keepDays: 5, maxStorageGb: 0, minFreeGb: 0, now: new Date(2026, 1, 1), getFree: plenty, log: quiet })
+  assert.ok(!fs.existsSync(kept))
 })
