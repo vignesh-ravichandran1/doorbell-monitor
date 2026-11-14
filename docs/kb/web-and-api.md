@@ -9,6 +9,7 @@ LAN (e.g. 192.168.x.x) have no Tailscale user.
 |---|---|---|
 | `/`, `/index.html` | none | the page |
 | `GET /api/clips`, clip files | none | Range requests supported |
+| `GET /api/health` | none | `health.report()`: level ok/starting/problem + headline + last event/clip/failure, for the status line |
 | `POST /api/login` | PIN | sets `doorbell_session` cookie |
 | `/api/auth/status`, `/api/logout` | — | |
 | `/api/passkey/login-options`, `/api/passkey/login` | none | Face ID unlock |

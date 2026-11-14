@@ -122,3 +122,45 @@ test('deleteClips skips a clip that is still being recorded', async () => {
   assert.equal(skipped[0].reason, 'still recording')
   assert.ok(fs.existsSync(clip))
 })
+
+test('protected rings: over the cap, motion clips go first even when a ring is older', () => {
+  const root = tmp()
+  const ring = makeClip(root, '2026-01-29', '080000_ding_a.mp4', 1000)
+  const m1 = makeClip(root, '2026-01-30', '080000_motion_a.mp4', 1000)
+  const m2 = makeClip(root, '2026-01-31', '080000_motion_a.mp4', 1000)
+  fs.writeFileSync(m1.replace('.mp4', '.json'), '{}')
+  prune(root, { keepDays: 0, maxStorageGb: 2500 / 1024 ** 3, minFreeGb: 0, protectRings: true, now: new Date(2026, 1, 1), getFree: plenty, log: quiet })
+  assert.ok(fs.existsSync(ring), 'ring kept')
+  assert.ok(!fs.existsSync(m1) && !fs.existsSync(m1.replace('.mp4', '.json')), 'oldest motion clip and its files gone')
+  assert.ok(fs.existsSync(m2))
+})
+
+test('protected rings may use at most half the space; beyond that the oldest ring goes', () => {
+  const root = tmp()
+  const r1 = makeClip(root, '2026-01-29', '080000_ding_a.mp4', 1000)
+  const r2 = makeClip(root, '2026-01-30', '080000_ding_a.mp4', 1000)
+  const m = makeClip(root, '2026-01-31', '080000_motion_a.mp4', 500)
+  // 2503 bytes in all, cap 2400: rings (2002) are over half the cap (1200), so the oldest ring
+  // goes rather than the motion clip, and that's enough
+  prune(root, { keepDays: 0, maxStorageGb: 2400 / 1024 ** 3, minFreeGb: 0, protectRings: true, now: new Date(2026, 1, 1), getFree: plenty, log: quiet })
+  assert.deepEqual([r1, r2, m].map((c) => fs.existsSync(c)), [false, true, true])
+})
+
+test('protected rings are exempt from the day limit', () => {
+  const root = tmp()
+  const ring = makeClip(root, '2026-01-01', '080000_ding_a.mp4')
+  const motion = makeClip(root, '2026-01-01', '090000_motion_a.mp4')
+  prune(root, { keepDays: 10, maxStorageGb: 0, minFreeGb: 0, protectRings: true, now: new Date(2026, 1, 1), getFree: plenty, log: quiet })
+  assert.ok(fs.existsSync(ring))
+  assert.ok(!fs.existsSync(motion))
+})
+
+test('disk almost full still deletes, motion clips first', () => {
+  const root = tmp()
+  const ring = makeClip(root, '2026-01-29', '080000_ding_a.mp4')
+  const motion = makeClip(root, '2026-01-30', '080000_motion_a.mp4')
+  const frees = [0, 1e15]
+  prune(root, { keepDays: 0, maxStorageGb: 0, minFreeGb: 5, protectRings: true, now: new Date(2026, 1, 1), getFree: () => frees.shift(), log: quiet })
+  assert.ok(fs.existsSync(ring))
+  assert.ok(!fs.existsSync(motion))
+})

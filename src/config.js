@@ -13,7 +13,7 @@ export const ENV_KEYS = [
   'RING_REFRESH_TOKEN', 'RECORDINGS_PATH', 'RECORD_SECONDS', 'RECORD_SECONDS_DING', 'RECORD_SECONDS_MOTION',
   'MAX_CLIP_SECONDS', 'RECORD_ON', 'NOTIFY_ON', 'MOTION_COOLDOWN_SECONDS', 'KEEP_DAYS', 'MAX_STORAGE_GB',
   'MIN_FREE_GB', 'WEB_PORT', 'WEB_BASE_URL', 'NTFY_URL', 'NTFY_TOPIC', 'NTFY_TOKEN', 'SETTINGS_PIN_HASH',
-  'DEBUG_LOG',
+  'DEBUG_LOG', 'PROTECT_RINGS',
 ]
 // Tests set DOORBELL_IGNORE_ENV_FILE so this computer's settings can't change their results.
 if (fs.existsSync(envFile) && !process.env.DOORBELL_IGNORE_ENV_FILE) process.loadEnvFile(envFile)
@@ -34,6 +34,8 @@ export const config = {
   notifyOn: list('NOTIFY_ON', ''),
   motionCooldownSeconds: Number(env('MOTION_COOLDOWN_SECONDS', '120')),
   keepDays: Number(env('KEEP_DAYS', '0')),
+  // Ring clips are deleted only after every motion clip (see storage.prune).
+  protectRings: env('PROTECT_RINGS', '1') !== '0',
   maxStorageGb: Number(env('MAX_STORAGE_GB', '20')),
   minFreeGb: Number(env('MIN_FREE_GB', '5')),
   webPort: Number(env('WEB_PORT', '8080')),

@@ -11,7 +11,10 @@
 3. `recorder.record()` streams live view → ffmpeg → `<recordings>/YYYY-MM-DD/HHMMSS_<event>_<camera>.mp4`.
    On Windows ffmpeg is killed outright, so fragments are cut every ≤0.5 s and recording runs 1 s longer.
 4. `thumbnail.makeThumbnail()` picks the most telling frame → `.jpg` next to the mp4.
-5. `housekeeping()` → `storage.prune()` (KEEP_DAYS, MAX_STORAGE_GB, MIN_FREE_GB); also hourly.
+5. `housekeeping()` → `storage.prune()` (KEEP_DAYS, MAX_STORAGE_GB, MIN_FREE_GB, PROTECT_RINGS: rings go only after
+   all motion clips and skip KEEP_DAYS, but at most half the cap; disk-low still deletes, motion first); also hourly.
+6. `health.js` collects what the page's status line shows: main.js reports events, saved clips, failures;
+   push-debug's `status.state()` gives the event connection's up/down times.
 
 ## Modules (src/)
 | File | Role |
@@ -27,7 +30,8 @@
 | passkeys.js | WebAuthn (Face ID / Windows Hello); only on https or localhost; stored in data/passkeys.json |
 | updater.js / update-guard.js | Phone updates + rollback → see updates.md. Node built-ins only |
 | lifecycle.js | Daily log file `logs/recorder-YYYY-MM-DD.log` (30 days), `logs/state.json`, stop reasons, sleep/stall gaps, `stop-request` file |
-| push-debug.js | Makes Ring's push connection visible in the log (`--debug` = raw pushes) |
+| push-debug.js | Makes Ring's push connection visible in the log (`--debug` = raw pushes); `status.state()` for health |
+| health.js | Recorder status for the page (`/api/health`): ok / starting (3 min grace) / problem (no Ring login, events down > 3 min, last recording failed) |
 | doctor.js / setup.js / record-check.js / rethumb.js | CLI tools: `npm run doctor`, `setup`/`login`/`pin`, `test-clip`, `rethumb` |
 | web/index.html | The whole clips page (HTML+CSS+one script), ~1000 lines |
 

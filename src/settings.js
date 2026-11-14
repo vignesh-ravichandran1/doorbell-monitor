@@ -13,6 +13,7 @@ export const FIELDS = [
   { key: 'MAX_STORAGE_GB', prop: 'maxStorageGb', type: 'number', min: 0, max: 100000, live: true },
   { key: 'MIN_FREE_GB', prop: 'minFreeGb', type: 'number', min: 0, max: 10000, live: true },
   { key: 'KEEP_DAYS', prop: 'keepDays', type: 'integer', min: 0, max: 3650, live: true },
+  { key: 'PROTECT_RINGS', prop: 'protectRings', type: 'boolean', live: true },
   { key: 'RECORD_SECONDS_DING', prop: 'recordSecondsDing', type: 'integer', min: 5, max: 600, live: true },
   { key: 'RECORD_SECONDS_MOTION', prop: 'recordSecondsMotion', type: 'integer', min: 5, max: 600, live: true },
   { key: 'MAX_CLIP_SECONDS', prop: 'maxClipSeconds', type: 'integer', min: 10, max: 1800, live: true },
@@ -73,6 +74,11 @@ export function validateSettings(input, config) {
         else value = EVENTS.filter((e) => list.includes(e)).join(',')
         break
       }
+      case 'boolean':
+        if ([true, '1', 'true'].includes(raw)) value = '1'
+        else if ([false, '0', 'false'].includes(raw)) value = '0'
+        else errors[f.key] = 'Choose on or off.'
+        break
       case 'topic':
         if (!/^[A-Za-z0-9_-]{0,64}$/.test(String(raw))) errors[f.key] = 'Use letters, numbers, - and _ only (max 64).'
         else value = String(raw)
@@ -95,7 +101,8 @@ export function validateSettings(input, config) {
         break
       }
     }
-    const before = Array.isArray(current[f.key]) ? current[f.key].join(',') : String(current[f.key])
+    const before = Array.isArray(current[f.key]) ? current[f.key].join(',')
+      : typeof current[f.key] === 'boolean' ? (current[f.key] ? '1' : '0') : String(current[f.key])
     if (value !== undefined && value !== before) values[f.key] = value
   }
   if (input.MAX_CLIP_SECONDS !== undefined && !errors.MAX_CLIP_SECONDS) {
@@ -116,7 +123,8 @@ export function applySettings(values, config, file = envFile) {
     process.env[key] = value
     if (!f.live) continue
     config[f.prop] = f.type === 'events' ? new Set(value.split(',').filter(Boolean))
-      : f.type === 'number' || f.type === 'integer' ? Number(value) : value
+      : f.type === 'number' || f.type === 'integer' ? Number(value)
+      : f.type === 'boolean' ? value === '1' : value
   }
   return pendingRestart(config)
 }

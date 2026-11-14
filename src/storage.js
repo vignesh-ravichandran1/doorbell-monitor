@@ -35,34 +35,66 @@ const freeBytes = (root) => {
   return s.bavail * s.bsize
 }
 
+const isRing = (clip) => path.basename(clip).split('_')[1] === 'ding'
+
+// Every file that belongs to a clip (video, thumbnail, tags); returns the bytes freed.
+function removeClip(clip) {
+  const dir = path.dirname(clip)
+  const stem = path.basename(clip, '.mp4')
+  let freed = 0
+  for (const f of fs.readdirSync(dir)) {
+    if (!f.startsWith(`${stem}.`)) continue
+    freed += sizeOf(path.join(dir, f))
+    fs.rmSync(path.join(dir, f), { force: true })
+  }
+  return freed
+}
+
 /**
  * Keep as many clips as fit: delete oldest-first only while all clips together take more
  * than maxStorageGb (0 = no cap) or the disk has less than minFreeGb free.
  * keepDays > 0 additionally deletes clips older than that (off by default).
+ * protectRings: ring clips go only after every motion clip, and are exempt from keepDays. So they
+ * can't crowd out motion clips for good, they may use at most half of maxStorageGb; beyond that
+ * the oldest rings go first.
  */
-export function prune(root, { keepDays, maxStorageGb, minFreeGb, now = new Date(), getFree = freeBytes, log = console.log }) {
+export function prune(root, { keepDays, maxStorageGb, minFreeGb, protectRings = false, now = new Date(), getFree = freeBytes, log = console.log }) {
   const today = Date.parse(dayName(now))
-  for (const day of keepDays > 0 ? dayDirs(root) : []) {
-    if ((today - Date.parse(day)) / 86400000 > keepDays) {
-      log(`pruning ${day} (older than ${keepDays} days)`)
-      fs.rmSync(path.join(root, day), { recursive: true, force: true })
+  if (keepDays > 0) {
+    const removed = new Map() // day -> count, for one log line per day
+    for (const clip of listClips(root)) {
+      const day = path.basename(path.dirname(clip))
+      if ((today - Date.parse(day)) / 86400000 <= keepDays || (protectRings && isRing(clip))) continue
+      removeClip(clip)
+      removed.set(day, (removed.get(day) || 0) + 1)
     }
+    for (const [day, n] of removed) log(`pruning ${n} clip(s) from ${day} (older than ${keepDays} days)`)
   }
 
-  const clips = listClips(root)
+  const clips = listClips(root).map((clip) => ({ clip, ring: isRing(clip) })) // oldest first
+  const clipBytes = (clip) => fs.readdirSync(path.dirname(clip))
+    .filter((f) => f.startsWith(`${path.basename(clip, '.mp4')}.`))
+    .reduce((s, f) => s + sizeOf(path.join(path.dirname(clip), f)), 0)
   let used = dayDirs(root).reduce((sum, day) => sum + fs.readdirSync(path.join(root, day))
     .reduce((s, f) => s + sizeOf(path.join(root, day, f)), 0), 0)
+  let ringBytes = protectRings ? clips.filter((c) => c.ring).reduce((s, c) => s + clipBytes(c.clip), 0) : 0
   const maxBytes = maxStorageGb * GB
   while (clips.length) {
     const overCap = maxBytes > 0 && used > maxBytes
     const diskLow = getFree(root) < minFreeGb * GB
     if (!overCap && !diskLow) break
-    const oldest = clips.shift()
-    log(`pruning ${path.relative(root, oldest)} (${overCap ? 'storage cap' : 'disk low'})`)
-    for (const f of [oldest, thumbOf(oldest)]) {
-      used -= sizeOf(f)
-      fs.rmSync(f, { force: true })
+    let victim = clips[0]
+    let reason = overCap ? 'storage cap' : 'disk low'
+    if (protectRings) {
+      const rings = ringBytes > maxBytes / 2 && maxBytes > 0 && !diskLow
+      victim = rings ? clips.find((c) => c.ring) : clips.find((c) => !c.ring) ?? clips[0]
+      if (rings) reason = 'ring clips over half the space'
     }
+    clips.splice(clips.indexOf(victim), 1)
+    log(`pruning ${path.relative(root, victim.clip)} (${reason})`)
+    const freed = removeClip(victim.clip)
+    used -= freed
+    if (victim.ring) ringBytes -= freed
   }
 
   for (const day of dayDirs(root)) {

@@ -30,6 +30,10 @@ is saved and never live, so recording and the Ring push connection are never hel
   "package delivered, then gone" needs another approach, e.g. watching a doorstep zone for a
   lasting change between clips, or a parcel-trained model.
 
+## Done: recorder status on the clips page, protected ring clips (2026-11-14)
+A status line under the storage meter (green / starting / red with the reason, details on tap), and
+ring clips that are deleted only after all motion clips (`PROTECT_RINGS`, up to half the space).
+
 ## Done: thumbnails that show what happened (2026-11-09)
 Ring clips use the best frame in the 5 s after the ring. Motion clips use the frame most
 different from the empty scene, taken as the per-pixel median of the clip's last quarter, and
@@ -40,17 +44,10 @@ skip blurry frames. `npm run rethumb` covers old clips. Ideas to improve it:
 
 # Later
 
-## Recorder health on the clips page
-Push connection status and the recorder lifecycle go to the log file only. Show them on the page
-too, so a silent failure is visible the moment it's opened: connected to Ring or not, last Ring
-event, last clip saved, last error. (Two days of missing clips went unnoticed before.)
-
 ## Never purge significant events
 Purging is size-first: the oldest clips go when `MAX_STORAGE_GB` (or `MIN_FREE_GB`) is reached;
 `KEEP_DAYS` is optional and off by default. Significant clips should be kept no matter what.
 
-- **Cheapest first step (no AI):** keep ring clips automatically (a separate pool or cap), since
-  a ring nearly always means a visitor.
 - **"Keep" button** on the clips page that moves a clip into a `keep/` folder the purger never
   touches.
 - **With detection** (see Next release): protect clips tagged person (optionally vehicle).

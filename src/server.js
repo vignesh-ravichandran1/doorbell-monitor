@@ -9,6 +9,7 @@ import { FIELDS, Sessions, applySettings, currentSettings, pendingRestart, store
 import { Passkeys } from './passkeys.js'
 import { clipSummary, deleteClips } from './storage.js'
 import * as updater from './updater.js'
+import { report as healthReport } from './health.js'
 
 const PAGE = path.join(path.dirname(fileURLToPath(import.meta.url)), 'web', 'index.html')
 const TYPES = { '.mp4': 'video/mp4', '.jpg': 'image/jpeg' }
@@ -203,6 +204,7 @@ export function startServer(root, port, { config = { maxStorageGb: 0, keepDays: 
     if (urlPath === '/' || urlPath === '/index.html') {
       return sendFile(req, res, PAGE, 'text/html; charset=utf-8')
     }
+    if (urlPath === '/api/health') return json(res, 200, healthReport())
     if (urlPath === '/api/clips') {
       return json(res, 200, { ...(await clipSummary(root)), capBytes: config.maxStorageGb * 1024 ** 3, keepDays: config.keepDays })
     }

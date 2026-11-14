@@ -40,6 +40,7 @@ Open `http://localhost:8080` on the recording computer, or `http://<its IP>:8080
 - **Delete clips:** tap **Select**, then tick clips, **slide sideways across clips and drag up or down** to select many at once like iOS Photos (the page scrolls when you reach the edge), tap **Select all** next to a day for the whole day, or **Select all** at the bottom for everything the filters show. Then **Delete**. Or tap **Delete** while watching a clip. Deleting needs the Settings PIN and can't be undone. A clip that's still recording is skipped.
 - **Landscape on a phone, even with rotation lock on:** in the player tap **Landscape**, then turn the phone sideways. The video fills the screen; **Flip** turns it the other way, **Exit** goes back.
 - **Storage meter:** how much of your space is used and how many clips you have.
+- **Recorder status** under the meter: 🟢 recording and connected to Ring, 🟠 starting up, 🔴 a problem in plain English (e.g. Ring events not arriving, the last recording failed, recorder unreachable). Tap it for details: running since, Ring event connection, last event, last clip, last error.
 - **Settings:** see below.
 - **iPhone:** in Safari, **Share → Add to Home Screen** to open it like an app.
 
@@ -52,6 +53,7 @@ Open the clips page → **Settings** tab, and unlock it with your PIN (set durin
 | `MAX_STORAGE_GB` | `20` | Space for all clips; the oldest are deleted only when it's full (`0` = no cap) |
 | `MIN_FREE_GB` | `5` | Also purge if the disk itself gets this low |
 | `KEEP_DAYS` | `0` (off) | Optional: also delete clips older than this many days |
+| `PROTECT_RINGS` | `1` (on) | Ring clips are deleted only after all motion clips, and never by `KEEP_DAYS`; they may use up to half of `MAX_STORAGE_GB` |
 | `RECORD_SECONDS_DING` | `60` | Length of clips that start with a ring |
 | `RECORD_SECONDS_MOTION` | `30` | Length of clips that start with motion |
 | `MAX_CLIP_SECONDS` | `120` | New rings/motion during a clip extend it, up to this length |

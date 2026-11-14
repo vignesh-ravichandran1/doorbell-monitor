@@ -29,6 +29,15 @@ h1 { font-size: 22px; margin: 0 0 10px; letter-spacing: -.01em; }
 .meter { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
 .meter > i { display: block; height: 100%; width: 0; background: var(--meter); transition: width .3s; }
 .meter.warn > i { background: var(--meter-warn); }
+.health { display: flex; gap: 8px; align-items: center; width: 100%; margin-top: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: inherit; font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
+.health .dot { flex: 0 0 10px; height: 10px; border-radius: 50%; background: #9ca3af; }
+.health.ok .dot { background: #16a34a; }
+.health.starting .dot { background: #d97706; }
+.health.problem { border-color: #dc2626; background: color-mix(in srgb, #dc2626 10%, var(--surface)); font-weight: 600; }
+.health.problem .dot { background: #dc2626; }
+.health-details { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 8px 0 0; padding: 10px 12px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); font-size: 13px; }
+.health-details dt { color: var(--muted); }
+.health-details dd { margin: 0; }
 .stats { margin-top: 6px; font-size: 13px; color: var(--muted); }
 
 .filters { position: sticky; top: 0; z-index: 5; background: var(--bg); padding: 10px 0; border-bottom: 1px solid var(--line); }
@@ -185,6 +194,8 @@ h2 { align-items: baseline; }
     <div id="clips-head">
     <div class="meter" id="meter" role="progressbar" aria-label="Storage used"><i></i></div>
     <div class="stats" id="stats">Loading…</div>
+    <button type="button" class="health" id="health" aria-expanded="false"><span class="dot"></span><span id="health-text">Checking the recorder…</span></button>
+    <dl class="health-details" id="health-details" hidden></dl>
     </div>
   </header>
 
@@ -240,6 +251,10 @@ h2 { align-items: baseline; }
           <label for="KEEP_DAYS">Also delete clips older than (days)</label>
           <input type="number" id="KEEP_DAYS" min="0" step="1">
           <span class="help">0 = off: keep clips for as long as there is space.</span>
+        </div>
+        <div class="field" data-key="PROTECT_RINGS">
+          <div class="checks"><label><input type="checkbox" id="PROTECT_RINGS"> Protect ring clips</label></div>
+          <span class="help">Doorbell rings are deleted only after all motion clips, and never by the day limit. They can use up to half of the space.</span>
         </div>
       </div>
 
@@ -747,7 +762,53 @@ $('vdelete').addEventListener('click', async () => {
   if (c && await deleteUrls([c.url])) closeClip()
 })
 
+// ---- Recorder health ----
+// "2:08 PM", "Yesterday 2:08 PM" or "Nov 3, 2:08 PM"
+function when(ts) {
+  const d = new Date(ts)
+  const t = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+  if (isoDay(d) === today()) return t
+  if (isoDay(d) === daysAgo(1)) return `Yesterday ${t}`
+  return `${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}, ${t}`
+}
+function ago(ms) {
+  const m = Math.round(ms / 60000)
+  if (m < 60) return `${m} min`
+  const h = Math.floor(m / 60)
+  return h < 48 ? `${h} h ${m % 60} min` : `${Math.floor(h / 24)} days`
+}
+
+async function loadHealth() {
+  let h
+  try {
+    const res = await fetch('/api/health', { cache: 'no-store' })
+    if (!res.ok) throw new Error()
+    h = await res.json()
+  } catch {
+    h = { level: 'problem', headline: "Can't reach the recorder. Is the laptop on and the recorder running?" }
+  }
+  $('health').className = `health ${h.level}`
+  $('health-text').textContent = h.headline
+  const rows = []
+  const row = (k, v) => rows.push(`<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`)
+  if (h.startedAt) row('Running since', `${when(h.startedAt)} (${ago(Date.now() - h.startedAt)})`)
+  if (h.events) row('Ring events', h.events.connected
+    ? `connected since ${when(h.events.since)}${h.events.drops ? `, ${h.events.drops} reconnect${h.events.drops === 1 ? '' : 's'} since start` : ''}`
+    : `not connected since ${when(h.events.since)}`)
+  if (h.startedAt) row('Last Ring event', h.lastEvent ? `${label[h.lastEvent.event] || h.lastEvent.event} at ${h.lastEvent.camera}, ${when(h.lastEvent.at)}` : 'none since the recorder started')
+  if (h.startedAt) row('Last clip saved', h.lastClip ? `${when(h.lastClip.at)} (${h.lastClip.seconds} s)` : 'none since the recorder started')
+  if (h.lastFailure) row('Last failed recording', `${when(h.lastFailure.at)}: ${h.lastFailure.message}`)
+  if (h.lastError) row('Last other problem', `${when(h.lastError.at)}, ${h.lastError.what}: ${h.lastError.message}`)
+  $('health-details').innerHTML = rows.join('')
+}
+$('health').addEventListener('click', () => {
+  const open = $('health-details').hidden
+  $('health-details').hidden = !open
+  $('health').setAttribute('aria-expanded', open)
+})
+
 async function load() {
+  loadHealth()
   try {
     const res = await fetch('/api/clips', { cache: 'no-store' })
     const next = await res.json()
@@ -808,7 +869,8 @@ function fillSettings({ settings, fields, restart }) {
     const v = settings[f.key]
     if (f.type === 'events') {
       for (const box of document.querySelectorAll(`input[name="${f.key}"]`)) box.checked = v.includes(box.value)
-    } else if ($(f.key)) $(f.key).value = v ?? ''
+    } else if (f.type === 'boolean' && $(f.key)) $(f.key).checked = Boolean(v)
+    else if ($(f.key)) $(f.key).value = v ?? ''
   }
   for (const el of document.querySelectorAll('.field.bad')) el.classList.remove('bad')
   for (const el of document.querySelectorAll('.field .error')) el.remove()
@@ -1011,6 +1073,7 @@ $('settings').addEventListener('submit', async (e) => {
   const body = {}
   for (const f of settingsFields) {
     if (f.type === 'events') body[f.key] = [...document.querySelectorAll(`input[name="${f.key}"]:checked`)].map((b) => b.value)
+    else if (f.type === 'boolean' && $(f.key)) body[f.key] = $(f.key).checked
     else if ($(f.key)) body[f.key] = $(f.key).value.trim()
   }
   $('save').disabled = true

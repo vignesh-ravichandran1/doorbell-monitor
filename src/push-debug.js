@@ -34,6 +34,7 @@ export function watchPush(log, { verbose = false } = {}) {
   }
 
   let connectedAt = 0
+  let downSince = Date.now() // not connected yet at start
   let heartbeats = 0
   let pushes = 0
   let drops = 0
@@ -42,6 +43,7 @@ export function watchPush(log, { verbose = false } = {}) {
     switch (name) {
       case 'ON_READY':
         connectedAt = Date.now()
+        downSince = 0
         heartbeats = 0
         log('[push] connected to Google push service (mtalk.google.com:5228), ready for Ring events')
         break
@@ -49,6 +51,7 @@ export function watchPush(log, { verbose = false } = {}) {
         const up = connectedAt ? `${Math.round((Date.now() - connectedAt) / 60000)} min` : 'never got ready'
         log(`[push] disconnected (was up ${up}, ${heartbeats} heartbeats); reconnecting`)
         connectedAt = 0
+        downSince = Date.now()
         drops++
         break
       }
@@ -70,7 +73,10 @@ export function watchPush(log, { verbose = false } = {}) {
     return emit.call(this, name, ...args)
   }
 
-  return () => connectedAt
+  const status = () => connectedAt
     ? `push connected ${Math.round((Date.now() - connectedAt) / 60000)} min, ${heartbeats} heartbeats, ${pushes} pushes, ${drops} drops so far`
     : `push NOT connected (${drops} drops so far)`
+  // For the clips page's health line (health.js).
+  status.state = () => ({ connectedAt, downSince, drops, pushes })
+  return status
 }

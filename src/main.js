@@ -14,6 +14,7 @@ import { flushLog, startFileLog, trackLifecycle } from './lifecycle.js'
 import { startServer } from './server.js'
 import { prune } from './storage.js'
 import { markHealthy } from './updater.js'
+import { health } from './health.js'
 
 const log = (...args) => console.log(new Date().toLocaleString(), ...args)
 const debug = process.argv.includes('--debug') || process.env.DEBUG_LOG === '1'
@@ -56,6 +57,7 @@ async function notify(title, message, { priority = 'default', image, click } = {
     await fetch(`${config.ntfyUrl}/${config.ntfyTopic}`, { method: 'PUT', headers, body })
   } catch (e) {
     log('notification failed:', e.message)
+    health.error('phone alert', e.message)
   }
 }
 
@@ -64,6 +66,7 @@ function housekeeping() {
     prune(config.recordingsDir, { ...config, log })
   } catch (e) {
     log('housekeeping failed:', e.message)
+    health.error('deleting old clips', e.message)
   }
 }
 
@@ -95,12 +98,14 @@ async function main() {
   })
 
   const cameras = await ring.getCameras()
+  health.watching(cameras.map((c) => c.name), pushStatus.state)
   if (!cameras.length) log('no Ring cameras or doorbells found on this account')
   const recording = new Map() // camera id -> ClipSession in progress
   const lastMotionAlert = new Map()
 
   const handle = async (camera, event) => {
     log(`${event} at ${camera.name}`)
+    health.event(event, camera.name)
     if (config.notifyOn.has(event)) {
       const now = Date.now()
       const quiet = event === 'motion' && now - (lastMotionAlert.get(camera.id) ?? 0) < config.motionCooldownSeconds * 1000
@@ -125,6 +130,7 @@ async function main() {
     recording.set(camera.id, session)
     try {
       const { clip, thumb, started } = await record(camera, session, { ffmpeg, recordingsDir: config.recordingsDir, maxClipSeconds: config.maxClipSeconds, log })
+      health.clip(path.basename(clip), Math.round((Date.now() - session.startedAt) / 1000))
       event = session.event
       if (config.notifyOn.has(event)) {
         const rel = path.relative(config.recordingsDir, clip).split(path.sep).join('/')
@@ -133,6 +139,7 @@ async function main() {
       }
     } catch (e) {
       log(`recording at ${camera.name} failed:`, e.message)
+      health.recordingFailed(e.message)
     } finally {
       recording.delete(camera.id)
       housekeeping()

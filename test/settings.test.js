@@ -61,3 +61,10 @@ test('sessions: login, expiry, and lockout after repeated wrong PINs', () => {
   assert.match(s.login('2468', stored, 20).error, /Too many/)
   assert.ok(s.login('2468', stored, 70_000).token, 'unlocked after the wait')
 })
+
+test('on/off settings accept true/false and save as 1/0', () => {
+  const config = { ...baseConfig(), protectRings: true }
+  assert.deepEqual(validateSettings({ PROTECT_RINGS: true }, config).values, {}, 'unchanged')
+  assert.deepEqual(validateSettings({ PROTECT_RINGS: false }, config).values, { PROTECT_RINGS: '0' })
+  assert.ok(validateSettings({ PROTECT_RINGS: 'maybe' }, config).errors.PROTECT_RINGS)
+})
