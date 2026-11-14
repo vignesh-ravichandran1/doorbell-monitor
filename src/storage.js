@@ -76,6 +76,7 @@ function scanClips(root) {
  * the oldest rings go first.
  */
 export function prune(root, { keepDays, maxStorageGb, minFreeGb, protectRings = false, now = new Date(), getFree = freeBytes, log = console.log }) {
+  dayCache.clear() // pruning may delete from any day
   const today = Date.parse(dayName(now))
   let { clips, used } = scanClips(root)
   const remove = (c) => {
@@ -121,20 +122,38 @@ export function prune(root, { keepDays, maxStorageGb, minFreeGb, protectRings = 
   }
 }
 
+// clipSummary's memory of past days: folder -> { mtimeMs, at, entries }. Dropped whenever this
+// module changes a folder, when the folder's own timestamp changes, and after 5 minutes anyway.
+const dayCache = new Map()
+const DAY_CACHE_MS = 5 * 60_000
+
 /** Every clip, newest first, plus total size: the data behind the clips page. */
 // Async (it's called per page load and stats every file): a synchronous version would stall the
 // whole recorder whenever the disk is busy.
-export async function clipSummary(root) {
+export async function clipSummary(root, now = new Date()) {
   const sizes = new Map()
+  const today = dayName(now)
   const days = (await fs.promises.readdir(root, { withFileTypes: true }).catch(() => []))
     .filter((e) => e.isDirectory() && DAY_RE.test(e.name)).map((e) => e.name)
   const names = await Promise.all(days.map(async (day) => {
-    const files = await fs.promises.readdir(path.join(root, day)).catch(() => [])
-    await Promise.all(files.map(async (f) => {
-      const st = await fs.promises.stat(path.join(root, day, f)).catch(() => null)
-      if (st) sizes.set(path.join(root, day, f), st)
-    }))
-    return files.filter((f) => f.endsWith('.mp4')).map((f) => path.join(root, day, f))
+    const dir = path.join(root, day)
+    // Past days rarely change, so their file sizes are remembered instead of checking every file
+    // on every request (each open page asks every 30 s). Today's folder is always read fresh.
+    const dirStat = day === today ? null : await fs.promises.stat(dir).catch(() => null)
+    const cached = dayCache.get(dir)
+    let entries
+    if (dirStat && cached && cached.mtimeMs === dirStat.mtimeMs && Date.now() - cached.at < DAY_CACHE_MS) {
+      entries = cached.entries
+    } else {
+      const files = await fs.promises.readdir(dir).catch(() => [])
+      entries = (await Promise.all(files.map(async (f) => {
+        const st = await fs.promises.stat(path.join(dir, f)).catch(() => null)
+        return st && [f, { size: st.size, mtimeMs: st.mtimeMs }]
+      }))).filter(Boolean)
+      if (dirStat) dayCache.set(dir, { mtimeMs: dirStat.mtimeMs, at: Date.now(), entries })
+    }
+    for (const [f, st] of entries) sizes.set(path.join(dir, f), st)
+    return entries.map(([f]) => f).filter((f) => f.endsWith('.mp4')).map((f) => path.join(dir, f))
   }))
   let usedBytes = 0
   const clips = names.flat().map((clip) => {
@@ -176,6 +195,7 @@ export async function setKept(root, url, kept) {
   if (!(await fs.promises.stat(clip).catch(() => null))) return false
   if (kept) await fs.promises.writeFile(keepFile(clip), '')
   else await fs.promises.rm(keepFile(clip), { force: true })
+  dayCache.delete(path.dirname(clip))
   return true
 }
 
@@ -217,6 +237,7 @@ export async function deleteClips(root, urls, { now = Date.now(), busyMs = 15_00
     }
     deleted.push(url)
     days.add(day)
+    dayCache.delete(path.join(root, day))
   }
   for (const day of days) {
     const dir = path.join(root, day)

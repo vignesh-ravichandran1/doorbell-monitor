@@ -180,3 +180,21 @@ test('kept clips are never purged, by cap, days or a full disk; unkeeping makes 
   prune(root, { keepDays: 5, maxStorageGb: 0, minFreeGb: 0, now: new Date(2026, 1, 1), getFree: plenty, log: quiet })
   assert.ok(!fs.existsSync(kept))
 })
+
+test('clipSummary remembers past days but still sees deletes, keeps and new clips', async () => {
+  const root = tmp()
+  makeClip(root, '2026-01-30', '080000_ding_a.mp4', 10)
+  const second = makeClip(root, '2026-01-30', '090000_motion_a.mp4', 10)
+  const old = Date.now() - 60_000
+  for (const f of fs.readdirSync(path.join(root, '2026-01-30'))) fs.utimesSync(path.join(root, '2026-01-30', f), old / 1000, old / 1000)
+  assert.equal((await clipSummary(root)).clips.length, 2)
+  assert.equal((await clipSummary(root)).clips.length, 2, 'second call, from memory')
+  await setKept(root, '/2026-01-30/080000_ding_a.mp4', true)
+  assert.equal((await clipSummary(root)).clips.find((c) => c.event === 'ding').kept, true)
+  await deleteClips(root, ['/2026-01-30/090000_motion_a.mp4'])
+  assert.ok(!fs.existsSync(second))
+  assert.equal((await clipSummary(root)).clips.length, 1)
+  prune(root, { keepDays: 0, maxStorageGb: 0, minFreeGb: 0, getFree: plenty, log: quiet })
+  makeClip(root, '2026-01-30', '100000_motion_a.mp4', 10)
+  assert.equal((await clipSummary(root)).clips.length, 2, 'a clip added to a past day shows up')
+})

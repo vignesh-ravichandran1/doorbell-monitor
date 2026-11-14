@@ -14,3 +14,5 @@
   loopback through ring-client-api's peer connection (66/66 video packets on both versions); kept as a test.
 - 2026-11-14: `storage.prune` re-read a day folder once per clip (ring sizes, keep markers, deletes): 1.4 s with
   4,000 clips even when nothing was deleted, blocking the recorder after every clip. Now one scan (`scanClips`): ~55 ms.
+- 2026-11-14: `clipSummary` stat-ed every file on every poll; past days are now cached per folder (folder mtime, 5 min TTL,
+  dropped by prune/deleteClips/setKept). Today is never cached.
