@@ -26,5 +26,8 @@
   },
   "optionalDependencies": {
     "ffmpeg-for-homebridge": "^2.2.2"
+  },
+  "overrides": {
+    "werift": "0.26.0"
   }
 }

@@ -36,6 +36,9 @@
 | web/index.html | The whole clips page (HTML+CSS+one script), ~1000 lines |
 
 `scripts/patch-push-receiver.cjs` (postinstall) patches two crash bugs in @eneris/push-receiver.
+`package.json` overrides `werift` (ring-client-api's WebRTC) to 0.26: 0.22 pulled in `ip` (npm audit high).
+Don't run `npm audit fix --force`: it downgrades ring-client-api to v9. `test/live-view.test.js` runs
+ring-client-api's own peer connection against a werift "doorbell" to prove live view still gets video.
 `scripts/test.mjs` = `npm test` wrapper (see testing.md).
 
 ## Files on disk (all gitignored)

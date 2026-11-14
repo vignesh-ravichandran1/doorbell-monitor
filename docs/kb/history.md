@@ -10,3 +10,5 @@
   keyframes): fragments every 0.5 s + 1 s extra (ec16ce1). Same commit: tests stop reading `.env`.
 - 2026-11-08 Recorder moved from the Startup folder to a SYSTEM boot task so it survives Windows
   Update restarts and runs before sign-in (1a0bee8).
+- 2026-11-14: werift 0.22 → 0.26 (npm override) to drop the vulnerable `ip` package. Checked with a WebRTC
+  loopback through ring-client-api's peer connection (66/66 video packets on both versions); kept as a test.

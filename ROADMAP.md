@@ -30,9 +30,12 @@ is saved and never live, so recording and the Ring push connection are never hel
   "package delivered, then gone" needs another approach, e.g. watching a doorstep zone for a
   lasting change between clips, or a parcel-trained model.
 
-## Done: recorder status on the clips page, protected ring clips (2026-11-14)
+## Done: recorder status on the clips page, protected ring clips, werift security update (2026-11-14)
 A status line under the storage meter (green / starting / red with the reason, details on tap), and
 ring clips that are deleted only after all motion clips (`PROTECT_RINGS`, up to half the space).
+`werift` (live view's WebRTC) moved to 0.26 via an npm override, which drops the vulnerable `ip`
+package; `npm audit` is clean. `test/live-view.test.js` checks ring-client-api's live view still
+receives video over it.
 
 ## Done: thumbnails that show what happened (2026-11-09)
 Ring clips use the best frame in the 5 s after the ring. Motion clips use the frame most
@@ -98,12 +101,6 @@ Over Tailscale (especially when relayed through DERP) full-quality clips can stu
 clip is saved, make a 720p "phone" copy in the background (about a third of the size) and play it
 when not on the home network, with a toggle for full quality. Costs ~30% more disk and some CPU.
 First check the cheap fix: `tailscale ping` shows "via DERP" → enable UPnP on the router.
-
-## Security: werift / ip
-`npm audit` flags `ip` (SSRF in isPublic) via `werift` 0.22, used by ring-client-api for live
-view. Not reachable in this app (no untrusted addresses), and `npm audit fix --force` would
-downgrade ring-client-api to v9, so don't. `werift` 0.26 drops `ip`: try an npm override to
-0.26 and retest recording before shipping it.
 
 ## Other
 - Daily summary notification (number of rings and motion events, thumbnails).
