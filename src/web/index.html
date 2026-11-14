@@ -212,6 +212,7 @@ h2 { align-items: baseline; }
       <button class="chip" data-type="all">All events</button>
       <button class="chip" data-type="ding">Rings</button>
       <button class="chip" data-type="motion">Motion</button>
+      <button class="chip" data-type="kept">★ Kept</button>
       <button class="chip" id="select-toggle" aria-pressed="false">Select</button>
       <span class="count" id="count"></span>
     </div>
@@ -427,7 +428,7 @@ function writeHash() {
 }
 
 function matches(c) {
-  if (state.type !== 'all' && c.event !== state.type) return false
+  if (state.type === 'kept' ? !c.kept : state.type !== 'all' && c.event !== state.type) return false
   switch (state.range) {
     case 'today': return c.day === today()
     case 'yesterday': return c.day === daysAgo(1)
