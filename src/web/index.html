@@ -825,7 +825,7 @@ $('health').addEventListener('click', () => {
 async function load() {
   loadHealth()
   try {
-    const res = await fetch('/api/clips', { cache: 'no-store' })
+    const res = await fetch('/api/clips', { cache: 'no-cache' }) // re-checks each time; downloads only if changed
     const next = await res.json()
     const changed = next.clips.length !== data.clips.length || next.clips[0]?.url !== data.clips[0]?.url
     data = next

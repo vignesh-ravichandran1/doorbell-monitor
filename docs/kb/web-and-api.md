@@ -8,7 +8,7 @@ LAN (e.g. 192.168.x.x) have no Tailscale user.
 | Route | Auth | Notes |
 |---|---|---|
 | `/`, `/index.html` | none | the page |
-| `GET /api/clips`, clip files | none | Range requests supported |
+| `GET /api/clips`, clip files | none | Range requests supported; the clip list has an ETag (304 when unchanged, page polls every 30 s) |
 | `GET /api/health` | none | `health.report()`: level ok/starting/problem + headline + last event/clip/failure, for the status line |
 | `POST /api/login` | PIN | sets `doorbell_session` cookie |
 | `/api/auth/status`, `/api/logout` | — | |

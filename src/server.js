@@ -1,5 +1,6 @@
 // Serves the clips page, its data (/api/clips), and the clip files themselves. Supports
 // Range requests so videos can seek (iPhone Safari refuses to play mp4 without it).
+import crypto from 'node:crypto'
 import fs from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
@@ -212,7 +213,13 @@ export function startServer(root, port, { config = { maxStorageGb: 0, keepDays: 
     }
     if (urlPath === '/api/health') return json(res, 200, healthReport())
     if (urlPath === '/api/clips') {
-      return json(res, 200, { ...(await clipSummary(root)), capBytes: config.maxStorageGb * 1024 ** 3, keepDays: config.keepDays })
+      // The page asks every 30 s. The ETag lets the browser skip the download (304) when nothing
+      // changed, which matters with thousands of clips on mobile data.
+      const body = JSON.stringify({ ...(await clipSummary(root)), capBytes: config.maxStorageGb * 1024 ** 3, keepDays: config.keepDays })
+      const etag = `"${crypto.createHash('sha1').update(body).digest('base64url')}"`
+      const headers = { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache', ETag: etag }
+      if (req.headers['if-none-match'] === etag) return res.writeHead(304, headers).end()
+      return res.writeHead(200, headers).end(body)
     }
     if (urlPath.startsWith('/api/')) {
       try {
