@@ -38,19 +38,33 @@ const freeBytes = (root) => {
 const isRing = (clip) => path.basename(clip).split('_')[1] === 'ding'
 // A clip marked "Keep" on the page has an empty <clip>.keep file next to it; it is never purged.
 const keepFile = (clip) => clip.replace(/\.mp4$/, '.keep')
-const isKept = (clip) => fs.existsSync(keepFile(clip))
 
-// Every file that belongs to a clip (video, thumbnail, tags); returns the bytes freed.
-function removeClip(clip) {
-  const dir = path.dirname(clip)
-  const stem = path.basename(clip, '.mp4')
-  let freed = 0
-  for (const f of fs.readdirSync(dir)) {
-    if (!f.startsWith(`${stem}.`)) continue
-    freed += sizeOf(path.join(dir, f))
-    fs.rmSync(path.join(dir, f), { force: true })
+// One pass over the recordings: every clip (oldest first) with all the files that belong to it
+// (video, thumbnail, tags, keep marker) and their total size. Each folder is read once, so
+// pruning stays quick with thousands of clips (it runs after every recording).
+function scanClips(root) {
+  const clips = []
+  let used = 0
+  for (const day of dayDirs(root)) {
+    const dir = path.join(root, day)
+    const byStem = new Map() // clip name without extension -> { files, bytes }
+    for (const f of fs.readdirSync(dir).sort()) {
+      const file = path.join(dir, f)
+      const bytes = sizeOf(file)
+      used += bytes
+      const stem = f.slice(0, f.indexOf('.') < 0 ? f.length : f.indexOf('.'))
+      const entry = byStem.get(stem) ?? { files: [], bytes: 0 }
+      entry.files.push(file)
+      entry.bytes += bytes
+      byStem.set(stem, entry)
+    }
+    for (const [stem, { files, bytes }] of byStem) {
+      const clip = path.join(dir, `${stem}.mp4`)
+      if (!files.includes(clip)) continue
+      clips.push({ clip, day, files, bytes, ring: isRing(clip), kept: files.includes(keepFile(clip)) })
+    }
   }
-  return freed
+  return { clips, used }
 }
 
 /**
@@ -63,25 +77,26 @@ function removeClip(clip) {
  */
 export function prune(root, { keepDays, maxStorageGb, minFreeGb, protectRings = false, now = new Date(), getFree = freeBytes, log = console.log }) {
   const today = Date.parse(dayName(now))
+  let { clips, used } = scanClips(root)
+  const remove = (c) => {
+    for (const f of c.files) fs.rmSync(f, { force: true })
+    used -= c.bytes
+  }
+
   if (keepDays > 0) {
     const removed = new Map() // day -> count, for one log line per day
-    for (const clip of listClips(root)) {
-      const day = path.basename(path.dirname(clip))
-      if ((today - Date.parse(day)) / 86400000 <= keepDays || (protectRings && isRing(clip)) || isKept(clip)) continue
-      removeClip(clip)
-      removed.set(day, (removed.get(day) || 0) + 1)
-    }
+    clips = clips.filter((c) => {
+      if ((today - Date.parse(c.day)) / 86400000 <= keepDays || (protectRings && c.ring) || c.kept) return true
+      remove(c)
+      removed.set(c.day, (removed.get(c.day) || 0) + 1)
+      return false
+    })
     for (const [day, n] of removed) log(`pruning ${n} clip(s) from ${day} (older than ${keepDays} days)`)
   }
 
   // Kept clips are never candidates, so only you can delete them (from the page).
-  const clips = listClips(root).filter((clip) => !isKept(clip)).map((clip) => ({ clip, ring: isRing(clip) })) // oldest first
-  const clipBytes = (clip) => fs.readdirSync(path.dirname(clip))
-    .filter((f) => f.startsWith(`${path.basename(clip, '.mp4')}.`))
-    .reduce((s, f) => s + sizeOf(path.join(path.dirname(clip), f)), 0)
-  let used = dayDirs(root).reduce((sum, day) => sum + fs.readdirSync(path.join(root, day))
-    .reduce((s, f) => s + sizeOf(path.join(root, day, f)), 0), 0)
-  let ringBytes = protectRings ? clips.filter((c) => c.ring).reduce((s, c) => s + clipBytes(c.clip), 0) : 0
+  clips = clips.filter((c) => !c.kept)
+  let ringBytes = protectRings ? clips.reduce((sum, c) => sum + (c.ring ? c.bytes : 0), 0) : 0
   const maxBytes = maxStorageGb * GB
   while (clips.length) {
     const overCap = maxBytes > 0 && used > maxBytes
@@ -96,9 +111,8 @@ export function prune(root, { keepDays, maxStorageGb, minFreeGb, protectRings = 
     }
     clips.splice(clips.indexOf(victim), 1)
     log(`pruning ${path.relative(root, victim.clip)} (${reason})`)
-    const freed = removeClip(victim.clip)
-    used -= freed
-    if (victim.ring) ringBytes -= freed
+    remove(victim)
+    if (victim.ring) ringBytes -= victim.bytes
   }
 
   for (const day of dayDirs(root)) {
