@@ -14,3 +14,5 @@
 - Single file: `node --test test/storage.test.js`.
 - Style: node:test + node:assert/strict, temp dirs via `fs.mkdtempSync(os.tmpdir())`, no mocks
   library; updater tests import a copied updater.js with `?random` to get a fresh module.
+
+- `test/server.test.js` starts the real server (port 0, temp folder): keep it passing so a broken `server.js` fails a phone update instead of crashing at start. `test/live-view.test.js` does the same for werift.
