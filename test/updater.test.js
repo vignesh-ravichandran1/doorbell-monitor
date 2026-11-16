@@ -92,7 +92,7 @@ test('refuses: Windows start script changes, local edits, local commits', { time
   const b = setup()
   fs.writeFileSync(path.join(b.work, 'feature.txt'), 'new')
   commit(b.work, 'Feature')
-  fs.writeFileSync(path.join(b.laptop, 'package.json'), '{"edited":true}')
+  fs.writeFileSync(path.join(b.laptop, 'package.json'), '{"edited":true,"type":"module"}')
   u = await updaterOf(b.laptop)
   s = await u.check()
   assert.equal(s.canUpdate, false)
