@@ -31,7 +31,7 @@ function setup() {
   return { work, laptop }
 }
 const writePkg = (dir, testCmd) =>
-  fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: 'x', private: true, scripts: { test: testCmd } }))
+  fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: 'x', private: true, type: 'module', scripts: { test: testCmd } }))
 function commit(dir, msg) {
   sh(dir, 'git', 'add', '-A')
   sh(dir, 'git', 'commit', '-q', '-m', msg)
